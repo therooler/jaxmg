@@ -97,7 +97,7 @@ target_include_directories(potrf PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 # Set the CUDA architecture
 set_target_properties(potrf PROPERTIES 
 CUDA_ARCHITECTURES "all"
-BUILD_RPATH $ENV{CUDA_ROOT}/lib64
+BUILD_RPATH $ENV{CUDA_ROOT}/lib64 # Can we remove this and use the stuff shipped with CUDA
 )
 # Link against CUDA libraries and absl
 target_link_libraries(potrf 
@@ -106,6 +106,6 @@ absl::status
 absl::statusor
 CUDA::cusolver
 CUDA::cupti
-${CUSOLVERMG_LIB}
+${CUSOLVERMG_LIB} # Can we remove this?
 cuda
 )
