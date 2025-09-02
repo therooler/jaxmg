@@ -46,13 +46,6 @@ CPMAddPackage(
   DOWNLOAD_ONLY YES
 )
 message(STATUS "XLA source directory: ${XLA_SOURCE_DIR}")
-# Use installed version of Jax for XLA library
-# execute_process(
-#   COMMAND "python"
-#           "-c" "from jax import ffi; print(ffi.include_dir())"
-#   OUTPUT_STRIP_TRAILING_WHITESPACE OUTPUT_VARIABLE XLA_DIR)
-# message(STATUS "XLA include directory: ${XLA_DIR}")
-
 # Since jaxlib is asking for #include "third_party/gpus/cuda/extras/CUPTI/include/cupti.h"
 # we need to create a symlink to to CUDA_HOME and pretend it can be accessed from third_party
 # Create the target directory
@@ -97,7 +90,7 @@ target_include_directories(potrf PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 # Set the CUDA architecture
 set_target_properties(potrf PROPERTIES 
 CUDA_ARCHITECTURES "all"
-BUILD_RPATH $ENV{CUDA_ROOT}/lib64 # Can we remove this and use the stuff shipped with CUDA
+# BUILD_RPATH $ENV{CUDA_ROOT}/lib64 # Can we remove this and use the stuff shipped with CUDA
 )
 # Link against CUDA libraries and absl
 target_link_libraries(potrf 
