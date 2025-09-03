@@ -3,7 +3,6 @@
 import subprocess
 import sys
 import os
-import pytest
 from pathlib import Path
 
 DEV_SETTER = Path(__file__).parent / "runner.py"

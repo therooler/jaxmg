@@ -1,4 +1,3 @@
-# run_test_with_devices.py
 import sys
 import os
 import pytest
