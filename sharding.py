@@ -19,7 +19,7 @@ from jax.sharding import PartitionSpec as P, NamedSharding
 import numpy as np
 import matplotlib.pyplot as plt
 from src.python.block_cyclic import block_cyclic_relayout, manual_block_cyclic_layout
-
+from src.python.block_cyclic import calculate_padding, calculate_valid_T_A
 
 def visualize_sharded_matrix(sharded_array, T_A):
     """
@@ -61,44 +61,54 @@ def visualize_sharded_matrix(sharded_array, T_A):
 
 
 if __name__ == "__main__":
-    N = 4
-    T_A = 36
-    for i in range(10):
-        print(N, T_A)
-        N+=i*4
+    T_A = 128
+    ndev = 8
+    for N in range(ndev,10000, ndev):
+        shard_size = N // ndev
+        padding = calculate_padding(shard_size, T_A, ndev)
+        if (ndev - 1) * padding > shard_size:
+            new_T_A = calculate_valid_T_A(shard_size, T_A, ndev)
+        if new_T_A==0:
+            print(N, new_T_A)
 
-        A = jnp.diag(jnp.arange(N) + 1).astype(jnp.float64)
-        mesh = jax.make_mesh((ndev,), ("x",))
-        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-        # for i, shard in enumerate(A.addressable_shards):
-        #     print(f"Shard A {i} on device {shard.device}:")
-        #     print(shard.data)
-        # print("A_bc:\n", A)
-        A_bc = block_cyclic_relayout(A, T_A)
-        # for i, shard in enumerate(A_bc.addressable_shards):
-        #     print(f"Shard A {i} on device {shard.device}:")
-        #     print(shard.data)
-        # print("A_bc:\n", A_bc)
-        # visualize_sharded_matrix(A_bc, T_A)
-        A_bc_manual = manual_block_cyclic_layout(A, T_A, ndev)
+    # N = 4
+    # T_A = 36
+    # for i in range(10):
+    #     print(N, T_A)
+    #     N+=i*4
 
-        # for row_i, row_j in zip(A_bc, A_bc_manual):
-            # print(row_i[:24].astype(int))
-            # print(row_j[:24].astype(int))
-            # if not jnp.allclose(row_i[: len(row_j)], row_j):
-            #     print(row_i)
-            #     print(row_j)
-            #     print("DIFF")
-            #     shard_size = N // ndev
-            #     target = T_A * ndev
-            #     padding = (target - ((shard_size) % target)) % target
-            #     print(shard_size)
-            #     print(target)
-            #     print(ndev * padding)
-                # out = "\n".join(
-                #     " ".join(f"{val:02d}" for val in row) for row in A_bc.astype(int)
-                # )
-                # print(out)
+    #     A = jnp.diag(jnp.arange(N) + 1).astype(jnp.float64)
+    #     mesh = jax.make_mesh((ndev,), ("x",))
+    #     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    #     # for i, shard in enumerate(A.addressable_shards):
+    #     #     print(f"Shard A {i} on device {shard.device}:")
+    #     #     print(shard.data)
+    #     # print("A_bc:\n", A)
+    #     A_bc = block_cyclic_relayout(A, T_A)
+    #     # for i, shard in enumerate(A_bc.addressable_shards):
+    #     #     print(f"Shard A {i} on device {shard.device}:")
+    #     #     print(shard.data)
+    #     # print("A_bc:\n", A_bc)
+    #     # visualize_sharded_matrix(A_bc, T_A)
+    #     A_bc_manual = manual_block_cyclic_layout(A, T_A, ndev)
 
-                # exit()
-        assert jnp.allclose(A_bc, A_bc_manual)
+    #     # for row_i, row_j in zip(A_bc, A_bc_manual):
+    #         # print(row_i[:24].astype(int))
+    #         # print(row_j[:24].astype(int))
+    #         # if not jnp.allclose(row_i[: len(row_j)], row_j):
+    #         #     print(row_i)
+    #         #     print(row_j)
+    #         #     print("DIFF")
+    #         #     shard_size = N // ndev
+    #         #     target = T_A * ndev
+    #         #     padding = (target - ((shard_size) % target)) % target
+    #         #     print(shard_size)
+    #         #     print(target)
+    #         #     print(ndev * padding)
+    #             # out = "\n".join(
+    #             #     " ".join(f"{val:02d}" for val in row) for row in A_bc.astype(int)
+    #             # )
+    #             # print(out)
+
+    #             # exit()
+    #     assert jnp.allclose(A_bc, A_bc_manual)

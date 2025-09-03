@@ -31,34 +31,43 @@ import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 from src.python.potrf import potrf
+from src.python.block_cyclic import calculate_padding, calculate_valid_T_A
+
 devices = jax.devices("gpu")
 
 
 
 def main():
-    # print(f"Getting FFI function from: {SHARED_LIBRARY}")
+    ndev = 1
     N = 8
     T_A = 3
-    dtype = jnp.float32
-    A = jnp.diag(jnp.arange(N, dtype=dtype)+1)
-    print(jnp.linalg.eigvalsh(A))
-    print(A)
-    b = jnp.ones((N, 1), dtype=dtype)
-    ndev = len(devices)
-    # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ('x', ))
-    A = jax.device_put(A, NamedSharding(mesh, P(None, 'x')))
-    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+    shard_size = N // ndev
+    padding = calculate_padding(shard_size, T_A, ndev)
+    shard_size_padded = shard_size + padding
+    num_tiles = (N + T_A - 1) // T_A
+    print(num_tiles)
+    dev = 0
+    k = dev
+    tiles = []
+    local_idx = 0
+    while k < num_tiles:
+        g_start = k * T_A
+        print("gs", g_start)
+        g_end = min(g_start + T_A, N)
+        T_A_clip = g_end - g_start
+        print("T_A_clip", T_A_clip)
+        l_start = local_idx * T_A
+        l_end = l_start + T_A_clip
+        tiles.append((l_start, l_end, g_start, g_end))
+        local_idx += 1
+        k += ndev
+    print(tiles)
+        # dev = mod_dev % ndev
+        # tile_end = min(tile_start + T_A, N)
+        # print(f"dev {dev}: {i[dev] * T_A } - {i[dev] * T_A + (tile_end - tile_start)}, idx {tile_start}-{tile_end}")
+        # mod_dev += 1
+        # i[dev] += 1
 
-    for i, shard in enumerate(A.addressable_shards):
-        print(f"Shard A {i} on device {shard.device}:")
-        print(shard.data)
-    for i, shard in enumerate(b.addressable_shards):
-        print(f"Shard b {i} on device {shard.device}:")
-        print(shard.data)
-    # Reconstruct from getrf
-    out = potrf(A, b, T_A=T_A)
-    print(f"Output: {out}")
 
 
 if __name__ == "__main__":
