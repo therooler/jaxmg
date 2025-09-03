@@ -79,7 +79,7 @@ def potrf(a, b, T_A, block_cyclic: bool = False):
         raise ValueError("A and b must be on the same mesh.")
 
     def impl(target_name):
-        out_type = jax.ShapeDtypeStruct(b.shape, jnp.float64)
+        out_type = jax.ShapeDtypeStruct(b.shape, b.dtype)
         fn = lambda _a, _b: jax.ffi.ffi_call(
             target_name,
             (out_type,),

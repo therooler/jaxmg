@@ -19,8 +19,7 @@ if any("gpu" == d.platform for d in jax.devices()):
     print("Running on GPU")
     jax.config.update("jax_platforms", "gpu")
 
-    def cusolver_solve(N, T_A):
-        dtype = jnp.float64
+    def cusolver_solve(N, T_A, dtype):
         A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
         b = jnp.ones((N, 1), dtype=dtype)
         ndev = len(devices)
@@ -43,17 +42,19 @@ if any("gpu" == d.platform for d in jax.devices()):
     if ndev == 1:
         print("Running block_cyclic test with 1 device.")
 
+        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (4, 8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A):
-            cusolver_solve(N, T_A)
+        def test_cusolver_solve_dev_1(N, T_A, dtype):
+            cusolver_solve(N, T_A, dtype)
 
     elif ndev == 2:
 
+        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A):
-            cusolver_solve(N, T_A)
+        def test_cusolver_solve_dev_1(N, T_A, dtype):
+            cusolver_solve(N, T_A, dtype)
 
     else:
         print("Test only works for 1 and 2 GPUs")
