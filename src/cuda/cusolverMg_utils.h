@@ -47,43 +47,18 @@
 
 
 namespace ffi = ::xla::ffi;
+
 template <typename T_ELEM>
-static void workspaceAlloc(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
-                           size_t sizeInBytes,                    /* number of bytes per device */
-                           void **array_d_work,                   /* <t> num_devices, host array */
-                           /* array_d_work[j] points to device workspace of device j */
-                           ffi::ScratchAllocator &scratch
-
-)
-{
-    int currentDev = 0; /* record current device ID */
-    CUDA_CHECK(cudaGetDevice(&currentDev));
-
-    auto maybe_workspace = scratch.Allocate(sizeInBytes);
-    array_d_work[currentDev] = static_cast<T_ELEM *>(maybe_workspace.value());
-}
-
-/* create a empty matrix A with A := 0 */
-template <typename T_ELEM>
-void createMat(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
+int64_t getWorkspaceBytesT_A(int num_devices, 
                int N_A,                               /* number of columns of global A */
                int T_A,                               /* number of columns per column tile */
-               int LLD_A,                             /* leading dimension of local A */
-               T_ELEM **array_d_A,                    /* host pointer array of dimension num_devices */
-                                                      // std::vector<T_ELEM*>array_d_A
-               ffi::ScratchAllocator &scratch)
+               int LLD_A                             /* leading dimension of local A */
+               )
 {
-    int currentDev = 0; /* record current device id */
-    CUDA_CHECK(cudaGetDevice(&currentDev));
-    CUDA_CHECK(cudaDeviceSynchronize());
     const int A_num_blks = (N_A + T_A - 1) / T_A;
     const int max_A_num_blks_per_device = (A_num_blks + num_devices - 1) / num_devices;
-    auto maybe_workspace = scratch.Allocate(sizeof(T_ELEM) * LLD_A * T_A * max_A_num_blks_per_device);
-    array_d_A[currentDev] = static_cast<T_ELEM *>(maybe_workspace.value());
-    CUDA_CHECK(
-        cudaMemset(array_d_A[currentDev], 0, sizeof(T_ELEM) * LLD_A * T_A * max_A_num_blks_per_device));
-
-    CUDA_CHECK(cudaDeviceSynchronize());
+    int64_t nbytes = sizeof(T_ELEM) * LLD_A * T_A * max_A_num_blks_per_device;
+    return nbytes;
 }
 
 template <typename T_ELEM>
@@ -306,23 +281,26 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
     
     std::printf("memcopyCyclic num_blks: %d\n", num_blks);
     int nz_blks = 0;
+    int global_blk_id = currentDev;
+    int T_A_clip=0;
     for (int JA_blk_id = 0; JA_blk_id < num_blks; JA_blk_id++)
     {
         std::printf("JA_blk_id: %d\n", JA_blk_id);
         T_ELEM *d_A = array_d_A_packed[currentDev] + static_cast<size_t>(LLD_A) * T_A * nz_blks;
         const T_ELEM *h_A = h_B + static_cast<size_t>(LLD_A) * T_A * nz_blks;
-
+        T_A_clip = min((global_blk_id +1) * T_A, N_A) - global_blk_id * T_A;
+        std::printf("\tglobal_blk_id: %d, T_A_clip: %d\n", global_blk_id, T_A_clip);
         CUDA_CHECK(cudaMemcpy2D(d_A, /* dst */
                                 static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
                                 h_A, /* src */
                                 static_cast<size_t>(ldb) * sizeof(T_ELEM),
                                 static_cast<size_t>(M) * sizeof(T_ELEM),
-                                static_cast<size_t>(T_A),
+                                static_cast<size_t>(T_A_clip),
                                 cudaMemcpyDeviceToDevice));
-        std::vector<T_ELEM> data_block(static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A), 0);
+        std::vector<T_ELEM> data_block(static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A_clip), 0);
   
-        CUDA_CHECK(cudaMemcpy(data_block.data(), d_A, static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A), gpuMemcpyDeviceToHost));
-        for (int i = 0; i < static_cast<size_t>(LLD_A)* static_cast<size_t>(T_A); i++)
+        CUDA_CHECK(cudaMemcpy(data_block.data(), d_A, static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A_clip), gpuMemcpyDeviceToHost));
+        for (int i = 0; i < static_cast<size_t>(LLD_A)* static_cast<size_t>(T_A_clip); i++)
         {
             std::cout << "A:" << data_block[i] << std::endl;
         }
@@ -331,6 +309,7 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
         //     std::cout << data_block[i] << std::endl;
         // }
         nz_blks++;
+        global_blk_id += num_devices;
     }
 
     CUDA_CHECK(cudaDeviceSynchronize());

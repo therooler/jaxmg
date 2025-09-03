@@ -41,6 +41,26 @@
  #include <cusolverDn.h>
  #include <library_types.h>
  
+
+//  inline absl::Status CudaToStatus(cudaError_t err, const char* file, int line) {
+//     if (err == cudaSuccess) return absl::OkStatus();
+//     return absl::InternalError(
+//         absl::StrFormat("CUDA error %d (%s) at %s:%d",
+//                         static_cast<int>(err),
+//                         cudaGetErrorString(err),
+//                         file, line));
+//   }
+  
+//   inline absl::Status CusolverToStatus(cusolverStatus_t err, const char* file, int line) {
+//     if (err == CUSOLVER_STATUS_SUCCESS) return absl::OkStatus();
+//     return absl::InternalError(
+//         absl::StrFormat("cuSolver error %d at %s:%d",
+//                         static_cast<int>(err), file, line));
+//   }
+  
+//   #define CUDA_CHECK(expr) CudaToStatus((expr), __FILE__, __LINE__)
+//   #define CUSOLVER_CHECK(expr) CusolverToStatus((expr), __FILE__, __LINE__)
+
  // CUDA API error checking
  #define CUDA_CHECK(err)                                                                            \
      do {                                                                                           \
@@ -215,46 +235,6 @@
      }
  }
  
- template <typename T>
- void generate_random_matrix(cusolver_int_t m, cusolver_int_t n, T **A, int *lda) {
-     std::random_device rd;
-     std::mt19937 gen(rd());
-     std::uniform_real_distribution<typename traits<T>::S> dis(-1.0, 1.0);
-     auto rand_gen = std::bind(dis, gen);
- 
-     *lda = n;
- 
-     size_t matrix_mem_size = static_cast<size_t>(*lda * m * sizeof(T));
-     // suppress gcc 7 size warning
-     if (matrix_mem_size <= PTRDIFF_MAX)
-         *A = (T *)malloc(matrix_mem_size);
-     else
-         throw std::runtime_error("Memory allocation size is too large");
- 
-     if (*A == NULL)
-         throw std::runtime_error("Unable to allocate host matrix");
- 
-     for (int j = 0; j < n; ++j) {
-         for (int i = 0; i < m; ++i) {
-             T *A_col = (*A) + *lda * j;
-             A_col[i] = traits<T>::rand(rand_gen);
-         }
-     }
- }
- 
- // Makes matrix A of size mxn and leading dimension lda diagonal dominant
- template <typename T>
- void make_diag_dominant_matrix(cusolver_int_t m, cusolver_int_t n, T *A, int lda) {
-     for (int j = 0; j < std::min(m, n); ++j) {
-         T *A_col = A + lda * j;
-         auto col_sum = traits<typename traits<T>::S>::zero;
-         for (int i = 0; i < m; ++i) {
-             col_sum += traits<T>::abs(A_col[i]);
-         }
-         A_col[j] = traits<T>::add(A_col[j], col_sum);
-     }
- }
- 
  // Returns cudaDataType value as defined in library_types.h for the string containing type name
  cudaDataType get_cuda_library_type(std::string type_string) {
      if (type_string.compare("CUDA_R_16F") == 0)
@@ -288,23 +268,3 @@
      else
          throw std::runtime_error("Unknown CUDA datatype");
  }
- 
- // Returns cusolverIRSRefinement_t value as defined in cusolver_common.h for the string containing
- // solver name
- cusolverIRSRefinement_t get_cusolver_refinement_solver(std::string solver_string) {
-     if (solver_string.compare("CUSOLVER_IRS_REFINE_NONE") == 0)
-         return CUSOLVER_IRS_REFINE_NONE;
-     else if (solver_string.compare("CUSOLVER_IRS_REFINE_CLASSICAL") == 0)
-         return CUSOLVER_IRS_REFINE_CLASSICAL;
-     else if (solver_string.compare("CUSOLVER_IRS_REFINE_GMRES") == 0)
-         return CUSOLVER_IRS_REFINE_GMRES;
-     else if (solver_string.compare("CUSOLVER_IRS_REFINE_CLASSICAL_GMRES") == 0)
-         return CUSOLVER_IRS_REFINE_CLASSICAL_GMRES;
-     else if (solver_string.compare("CUSOLVER_IRS_REFINE_GMRES_GMRES") == 0)
-         return CUSOLVER_IRS_REFINE_GMRES_GMRES;
-     else
-         printf("Unknown solver parameter: \"%s\"\n", solver_string.c_str());
- 
-     return CUSOLVER_IRS_REFINE_NOT_SET;
- }
- 

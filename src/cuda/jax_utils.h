@@ -34,4 +34,48 @@ namespace jax
   }
 } // namespace jax
 
+
+inline absl::Status CudaToStatus(cudaError_t err, const char *file, int line)
+{
+  if (err == cudaSuccess)
+    return absl::OkStatus();
+  return absl::InternalError(
+      absl::StrFormat("CUDA error %d (%s) at %s:%d",
+                      static_cast<int>(err),
+                      cudaGetErrorString(err),
+                      file, line));
+}
+
+inline absl::Status CusolverToStatus(cusolverStatus_t err, const char *file, int line)
+{
+  if (err == CUSOLVER_STATUS_SUCCESS)
+    return absl::OkStatus();
+  return absl::InternalError(
+      absl::StrFormat("cuSolver error %d at %s:%d",
+                      static_cast<int>(err), file, line));
+}
+
+#define CUDA_CHECK_STATUS(expr) CudaToStatus((expr), __FILE__, __LINE__)
+#define CUSOLVER_CHECK_STATUS(expr) CusolverToStatus((expr), __FILE__, __LINE__)
+
+// Compose CUDA_CHECK with FFI return.
+#define CUDA_CHECK_OR_RETURN(...) \
+  do {                            \
+    FFI_RETURN_IF_ERROR_STATUS(   \
+      CUDA_CHECK_STATUS(__VA_ARGS__)); \
+  } while (0)
+
+// Compose CUSOLVER_CHECK with FFI return.
+#define CUSOLVER_CHECK_OR_RETURN(...) \
+  do {                                 \
+    FFI_RETURN_IF_ERROR_STATUS(        \
+      CUSOLVER_CHECK_STATUS(__VA_ARGS__));  \
+  } while (0)
+
+// Usage
+// #define CUDA_CHECK(expr) \
+//   CudaToStatus((expr), __FILE__, __LINE__)
+// #define CUSOLVER_CHECK(expr) \
+//   CusolverToStatus((expr), __FILE__, __LINE__)
+
 #endif // JAXLIB_GPU_SOLVER_HANDLE_POOL_H_

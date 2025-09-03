@@ -106,11 +106,12 @@ void DynamicBarrier::arrive_and_wait()
         barrier_ptr->arrive_and_wait();
     }
 }
- 
-double **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
+
+template <typename T>
+T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
     // static const char shmName[] = "shmA";
-    double **shm = nullptr;
+    T **shm = nullptr;
     pid_t pid = getppid();
     char pidString[20] = {0};
     char lshmName[40] = {0};
@@ -119,7 +120,7 @@ double **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, shar
     strcat(lshmName, shmName);
     strcat(lshmName, pidString);
 
-    size_t shmSize = MAX_NUM_DEVICES * sizeof(double *);
+    size_t shmSize = MAX_NUM_DEVICES * sizeof(T *);
 
     if (currentDevice == 0)
     {
@@ -128,7 +129,7 @@ double **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, shar
             printf("Failed to create shared memory\n");
             exit(EXIT_FAILURE); // You can later replace this with proper JAX error handling
         }
-        shm = (double **)info.addr;
+        shm = (T **)info.addr;
         memset((void *)shm, 0, shmSize);
         printf("%d: Shared memory initialized\n", currentDevice);
     }
@@ -142,7 +143,7 @@ double **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, shar
             printf("Failed to open shared memory\n");
             exit(EXIT_FAILURE);
         }
-        shm = (double **)info.addr;
+        shm = (T **)info.addr;
         printf("%d: Shared memory opened\n", currentDevice);
     }
 
@@ -150,6 +151,10 @@ double **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, shar
     
     return shm;
 }
+
+template double **get_shm_device_ptrs<double>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template float  **get_shm_device_ptrs<float >(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+
 
 int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
