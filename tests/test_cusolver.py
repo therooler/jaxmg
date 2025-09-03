@@ -19,20 +19,19 @@ if any("gpu" == d.platform for d in jax.devices()):
     print("Running on GPU")
     jax.config.update("jax_platforms", "gpu")
 
-
     def cusolver_solve(N, T_A):
         dtype = jnp.float64
-        A = jnp.diag(jnp.arange(N, dtype=dtype)+1)
+        A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
         b = jnp.ones((N, 1), dtype=dtype)
         ndev = len(devices)
         # Make mesh and place data
-        mesh = jax.make_mesh((ndev,), ('x', ))
-        A = jax.device_put(A, NamedSharding(mesh, P(None, 'x')))
+        mesh = jax.make_mesh((ndev,), ("x",))
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
         # Reconstruct from getrf
         (out,) = potrf(A, b, T_A=T_A)
-        expected_out = 1./ (jnp.arange(N, dtype=dtype)+1)
+        expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
         print(f"Output: {out}")
         print(f"Expected: {expected_out}")
         assert jnp.allclose(out.flatten(), expected_out)
@@ -49,8 +48,15 @@ if any("gpu" == d.platform for d in jax.devices()):
         def test_cusolver_solve_dev_1(N, T_A):
             cusolver_solve(N, T_A)
 
+    elif ndev == 2:
+
+        @pytest.mark.parametrize("T_A", (1, 2, 3))
+        @pytest.mark.parametrize("N", (8, 10, 12))
+        def test_cusolver_solve_dev_1(N, T_A):
+            cusolver_solve(N, T_A)
+
     else:
-        print("Test only works for a single GPU")
+        print("Test only works for 1 and 2 GPUs")
         assert True
 
 
