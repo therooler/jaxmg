@@ -131,11 +131,11 @@ namespace jax
                     absl::StrFormat("%s: Leading dimension of b must be equal to leading dimension of a, received = %d and  %d ", source, N_b, N));
             }
             
-            if ((nbGpus * batch_a) != N)
-            {
-                return ffi::Error::InvalidArgument(
-                    absl::StrFormat("%s: We must have  N = nbGPUs * batch_a, received batch_a = %d and nbGPUs = %d for N=%d", source, batch_a, nbGpus, N));
-            }
+            // if ((nbGpus * batch_a) != N)
+            // {
+            //     return ffi::Error::InvalidArgument(
+            //         absl::StrFormat("%s: We must have  N = nbGPUs * batch_a, received batch_a = %d and nbGPUs = %d for N=%d", source, batch_a, nbGpus, N));
+            // }
 
             const int IA = 1;
             const int JA = 1;
@@ -158,7 +158,6 @@ namespace jax
 
             int64_t lwork_potrf = 0;
             int64_t lwork_potrs = 0;
-            int64_t lwork = 0; /* workspace: number of elements per device */
 
             static std::once_flag barrier_initialized; /*Sync all threads*/
             std::call_once(barrier_initialized, [&]()

@@ -59,7 +59,6 @@ static void workspaceAlloc(int num_devices, const int *deviceIdA, /* <int> dimen
     int currentDev = 0; /* record current device ID */
     CUDA_CHECK(cudaGetDevice(&currentDev));
 
-    int deviceId = deviceIdA[currentDev];
     auto maybe_workspace = scratch.Allocate(sizeInBytes);
     array_d_work[currentDev] = static_cast<T_ELEM *>(maybe_workspace.value());
 }
@@ -303,7 +302,8 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
     CUDA_CHECK(cudaGetDevice(&currentDev));
     CUDA_CHECK(cudaDeviceSynchronize());
 
-    const int num_blks = ((N_A + T_A - 1) / T_A) / num_devices;
+    const int num_blks = ((N_batch * num_devices + T_A - 1) / T_A) / num_devices;
+    
     std::printf("memcopyCyclic num_blks: %d\n", num_blks);
     int nz_blks = 0;
     for (int JA_blk_id = 0; JA_blk_id < num_blks; JA_blk_id++)
@@ -322,7 +322,7 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
         std::vector<T_ELEM> data_block(static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A), 0);
   
         CUDA_CHECK(cudaMemcpy(data_block.data(), d_A, static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A), gpuMemcpyDeviceToHost));
-        for (int i = 0; i < static_cast<size_t>(LLD_A); i++)
+        for (int i = 0; i < static_cast<size_t>(LLD_A)* static_cast<size_t>(T_A); i++)
         {
             std::cout << "A:" << data_block[i] << std::endl;
         }
