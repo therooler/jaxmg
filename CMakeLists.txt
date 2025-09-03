@@ -78,19 +78,15 @@ add_definitions(-DJAX_GPU_CUDA=1)
 # Add libraries
 add_library(potrf SHARED 
 src/cuda/potrf.cu
-# src/solver_interface.cc
 src/cuda/jax_utils.cc
 src/cuda/shm.cc
-# ${jax_SOURCE_DIR}/jaxlib/gpu/solver_interface.cc
 ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
 )
 # Make sure we can see "thirdparty/gpus" and jax
-# target_include_directories()
 target_include_directories(potrf PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 # Set the CUDA architecture
 set_target_properties(potrf PROPERTIES 
 CUDA_ARCHITECTURES "all"
-# BUILD_RPATH $ENV{CUDA_ROOT}/lib64 # Can we remove this and use the stuff shipped with CUDA
 )
 # Link against CUDA libraries and absl
 target_link_libraries(potrf 
