@@ -14,6 +14,8 @@ import pytest
 from src.python.block_cyclic import (
     block_cyclic_relayout,
     manual_block_cyclic_layout,
+    calculate_padding,
+    calculate_valid_T_A,
 )
 
 
@@ -41,6 +43,15 @@ def block_cyclic_sharding(N, T_A):
 devices = jax.devices()
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
+
+def test_T_A_calculation():
+    T_A_MAX = 128
+    for N in range(ndev, 10000, ndev):
+        shard_size = N // ndev
+        padding = calculate_padding(shard_size, T_A_MAX, ndev)
+        if (ndev - 1) * padding > shard_size:
+            new_T_A = calculate_valid_T_A(shard_size, T_A_MAX, ndev)
+
 if ndev == 1:
     print("Skipping block_cyclic test with 1 device.")
 
