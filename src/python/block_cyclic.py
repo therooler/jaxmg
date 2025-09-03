@@ -21,28 +21,23 @@ def _make_block_cyclic(x_block, T_A, ndev, axis_name):
     # padding = (target - ((shard_size) % target)) % target
     padding = calculate_padding(shard_size, T_A, ndev)
     if (ndev - 1) * padding > shard_size:
-        #     x_block = jnp.concatenate([x_block, jnp.zeros((N, ), dtype=x_block.dtype)], axis=1)
-        new_T_A = T_A
-        while new_T_A>0:
-            suggested_padding = calculate_padding(shard_size, new_T_A, ndev)
-            if (ndev - 1) * suggested_padding <= shard_size:
-                break
-            new_T_A-=1
-        if new_T_A>0:
+        new_T_A = calculate_valid_T_A(shard_size, T_A, ndev)
+        if new_T_A > 0:
             suggested_padding_str = f"Largest T_A < {T_A} that would result in ndev * padding <= shard_size is T_A = {new_T_A}"
         else:
-            suggested_padding_str = f"Largest T_A < {T_A} exists, try enlarging T_A."
-        raise ValueError("Attempting 1d block cylic relayout with:\n" 
-                            f"\t- N = {N}\n"
-                            f"\t- shard_size = {shard_size}\n"
-                            f"\t- ndev = {ndev}\n"
-                            f"\t- T_A = {T_A}\n"
-                            "In order to use an all-to-all call to remap the matrix, we would need to add zero padding of\n"
-                            f"\t- padding: {padding}\n"
-                            f"This would require a shift of the last matrix of (ndev - 1) * padding = {(ndev-1) * padding} cols,"
-                            f"which is larger than the shard_size {shard_size}\n"
-                            f"{suggested_padding_str}"
-                            )
+            suggested_padding_str = f"No valid T_A < {T_A} exists, a future release may support this case."
+        raise ValueError(
+            "Attempting 1d block cylic relayout with:\n"
+            f"\t- N = {N}\n"
+            f"\t- shard_size = {shard_size}\n"
+            f"\t- ndev = {ndev}\n"
+            f"\t- T_A = {T_A}\n"
+            "In order to use an all-to-all call to remap the matrix, we would need to add zero padding of\n"
+            f"\t- padding: {padding}\n"
+            f"This would require a shift of the last matrix of (ndev - 1) * padding = {(ndev-1) * padding} cols,"
+            f"which is larger than the shard_size {shard_size}\n"
+            f"{suggested_padding_str}"
+        )
     shard_size_padded = shard_size + padding
     # We can shift the matrices to the right by shifting the leftmost columns
     # to the previous GPU, so cols 1:padding get shifted to gpu(i)->gpu(i-1)
@@ -55,7 +50,7 @@ def _make_block_cyclic(x_block, T_A, ndev, axis_name):
     # print(target)
     # print(shard_size)
     # print(padding)
-    
+
     x_left_chunk = jax.lax.cond(
         cond_first_gpu,
         lambda x: get_chunk_gpu_first(x, ndev * padding, axis_name),
@@ -101,11 +96,23 @@ def _make_block_cyclic(x_block, T_A, ndev, axis_name):
     shard_size_padded_necessary = shard_size + (T_A - (shard_size % T_A)) % T_A
     # print("before slice\n", x_block)
     return x_block[:, :shard_size_padded_necessary]
-        
+
+
 def calculate_padding(shard_size, T_A, ndev):
     target = T_A * ndev
     padding = (target - ((shard_size) % target)) % target
     return padding
+
+
+def calculate_valid_T_A(shard_size, T_A, ndev):
+    new_T_A = T_A
+    while new_T_A > 0:
+        suggested_padding = calculate_padding(shard_size, new_T_A, ndev)
+        if (ndev - 1) * suggested_padding <= shard_size:
+            break
+        new_T_A -= 1
+    return new_T_A
+
 
 def get_chunk_gpu_first(x_block, padding, axis_name):
     N = x_block.shape[0]
