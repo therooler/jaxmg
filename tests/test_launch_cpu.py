@@ -5,7 +5,8 @@ import sys
 import os
 from pathlib import Path
 
-DEV_SETTER = Path(__file__).parent / "runner.py"
+
+DEV_SETTER = Path(__file__).parent / "cpu_runner.py"
 
 def launch_runner(ndev):
     env = os.environ.copy()
@@ -18,7 +19,7 @@ def launch_runner(ndev):
     )
 
 
-def test_launch_multiple_configs():
+def test_launch_multiple_configs_cpu():
     # Launch three processes with different ndev settings
     procs = [launch_runner(ndev) for ndev in [1, 2, 4]]
 

@@ -44,6 +44,7 @@ devices = jax.devices()
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
 
+
 def test_T_A_calculation():
     T_A_MAX = 128
     for N in range(ndev, 10000, ndev):
@@ -52,8 +53,9 @@ def test_T_A_calculation():
         if (ndev - 1) * padding > shard_size:
             new_T_A = calculate_valid_T_A(shard_size, T_A_MAX, ndev)
 
+
 if ndev == 1:
-    print("Skipping block_cyclic test with 1 device.")
+    print("Running block_cyclic test with 1 device.")
 
     @pytest.mark.parametrize("T_A", (1, 2, 3))
     @pytest.mark.parametrize("N", (4, 8, 10, 12))
