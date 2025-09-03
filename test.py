@@ -38,10 +38,11 @@ def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
     N = 8
     T_A = 2
-    A = jnp.diag(jnp.arange(N, dtype=jnp.float64)+1)
+    dtype = jnp.float64
+    A = jnp.diag(jnp.arange(N, dtype=dtype)+1)
     print(jnp.linalg.eigvalsh(A))
     print(A)
-    b = jnp.ones((N, 1), dtype=jnp.float64)
+    b = jnp.ones((N, 1), dtype=dtype)
     ndev = len(devices)
     # Make mesh and place data
     mesh = jax.make_mesh((ndev,), ('x', ))
