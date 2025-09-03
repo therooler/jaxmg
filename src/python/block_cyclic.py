@@ -206,8 +206,6 @@ def manual_block_cyclic_layout(A, T_A, ndev):
         # To ensure unique tile ownership per device we need to pad the matrices
         # with zeros and shift the columns over the devices. The target is therefore
         # A matrix that is a multiple of T_A * ndev
-        target = T_A * ndev
-        padding = (target - ((shard_size) % target)) % target
         shard_size_padded_necessary = shard_size + (T_A - (shard_size % T_A)) % T_A
         shards = [jnp.zeros((N, shard_size_padded_necessary))] * ndev
         mod_dev = 0
@@ -224,45 +222,3 @@ def manual_block_cyclic_layout(A, T_A, ndev):
             mod_dev += 1
             i[dev] += 1
         return jnp.concatenate([shards[dev] for dev in range(ndev)], axis=1)
-
-
-def manual_block_cyclic_layout_old(A, T_A, ndev):
-    N = A.shape[0]
-    shard_size = N // ndev
-    if T_A >= shard_size:
-        return A
-
-    shards = []
-    for dev in range(ndev):
-        cols = []
-        for tile_start in range(0, N, T_A):
-            tile_end = min(tile_start + T_A, N)
-            tile = A[:, tile_start:tile_end]
-
-            # Pad tile if needed
-            if tile.shape[1] < T_A:
-                pad_width = T_A - tile.shape[1]
-                tile = jnp.pad(
-                    tile, ((0, 0), (0, pad_width)), mode="constant", constant_values=0
-                )
-
-            tile_idx = tile_start // T_A
-            if tile_idx % ndev == dev:
-                cols.append(tile)
-
-        shard = (
-            jnp.concatenate(cols, axis=1)
-            if cols
-            else jnp.zeros((A.shape[0], 0), dtype=A.dtype)
-        )
-
-        remainder = shard.shape[1] % T_A
-        if remainder != 0:
-            pad_width = T_A - remainder
-            shard = jnp.pad(
-                shard, ((0, 0), (0, pad_width)), mode="constant", constant_values=0
-            )
-
-        shards.append(shard)
-
-    return jnp.concatenate(shards, axis=1)
