@@ -25,7 +25,9 @@ def _make_block_cyclic(x_block, T_A, ndev, axis_name):
         if new_T_A > 0:
             suggested_padding_str = f"Largest T_A < {T_A} that would result in ndev * padding <= shard_size is T_A = {new_T_A}"
         else:
-            suggested_padding_str = f"No valid T_A < {T_A} exists, a future release may support this case."
+            suggested_padding_str = (
+                f"No valid T_A < {T_A} exists, a future release may support this case."
+            )
         raise ValueError(
             "Attempting 1d block cylic relayout with:\n"
             f"\t- N = {N}\n"
@@ -78,24 +80,45 @@ def _make_block_cyclic(x_block, T_A, ndev, axis_name):
     #   gpu0: (gpu_0_tiles_gpu_0, gpu_0_tiles_gpu_1,...)
     #   gpu1: (gpu_1_tiles_gpu_0, gpu_1_tiles_gpu_1,...)
     #     :
-    perm = local_block_cyclic_permutation(shard_size_padded, T_A, ndev)
-    if perm:
-        x_block = x_block[:, jnp.array(perm)]
-    # We can now use a single all-to-all call to redistribute the tiles to
-    #   gpu0: (gpu_0_tiles_gpu_0, gpu_0_tiles_gpu_0,...)
-    #   gpu1: (gpu_1_tiles_gpu_1, gpu_1_tiles_gpu_1,...)
-    #     :
-    # print("perm", perm)
-    # print(x_block)
-    x_block = x_block.reshape(N, ndev, -1)
-    x_block = jax.lax.all_to_all(
-        axis_name=axis_name, x=x_block, split_axis=1, concat_axis=1, tiled=False
-    )
-    x_block = x_block.reshape(N, shard_size_padded)
-    # We now remove the unneccesary padding that was required for the all-to-all
-    shard_size_padded_necessary = shard_size + (T_A - (shard_size % T_A)) % T_A
-    # print("before slice\n", x_block)
-    return x_block[:, :shard_size_padded_necessary]
+    # perm = local_block_cyclic_permutation(shard_size_padded, T_A, ndev)
+    # if perm:
+    # x_block = x_block[:, jnp.array(perm)]
+    # shard_cols is guaranteed multiple of ndev*T_A by your padding
+    blocks = shard_size_padded // (ndev * T_A)
+    # x_block: (N, shard_cols)
+    x = x_block.reshape(N, blocks, ndev, T_A)  # (N, blocks, dev, tile)
+    x = jnp.transpose(x, (0, 2, 1, 3))  # (N, dev, blocks, tile)
+
+    # Collapse (blocks, T_A) into a single width for the exchange
+    x = jnp.reshape(x, (N, ndev, blocks * T_A))
+
+    # Exchange tiles across devices
+    x = jax.lax.all_to_all(
+        x, axis_name=axis_name, split_axis=1, concat_axis=1, tiled=False
+    )  # (N, ndev, blocks*T_A)
+
+    # Back to (N, shard_size_padded)
+    x_block = jnp.reshape(x, (N, shard_size_padded))
+
+    #  Drop the padding
+    need = shard_size + (T_A - (shard_size % T_A)) % T_A
+    return x_block[:, :need]
+
+    # # We can now use a single all-to-all call to redistribute the tiles to
+    # #   gpu0: (gpu_0_tiles_gpu_0, gpu_0_tiles_gpu_0,...)
+    # #   gpu1: (gpu_1_tiles_gpu_1, gpu_1_tiles_gpu_1,...)
+    # #     :
+    # # print("perm", perm)
+    # # print(x_block)
+    # x_block = x_block.reshape(N, ndev, -1)
+    # x_block = jax.lax.all_to_all(
+    #     axis_name=axis_name, x=x_block, split_axis=1, concat_axis=1, tiled=False
+    # )
+    # x_block = x_block.reshape(N, shard_size_padded)
+    # # We now remove the unneccesary padding that was required for the all-to-all
+    # shard_size_padded_necessary = shard_size + (T_A - (shard_size % T_A)) % T_A
+    # # print("before slice\n", x_block)
+    # return x_block[:, :shard_size_padded_necessary]
 
 
 def calculate_padding(shard_size, T_A, ndev):
@@ -161,16 +184,37 @@ def concat_chunk_gpu_last(x_block, x_left_chunk, padding):
 def block_cyclic_relayout(a, T_A):
     """Perform block cyclic relayout"""
     mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    return jax.shard_map(
-        partial(
-            _make_block_cyclic,
-            T_A=T_A,
-            ndev=len(mesh_a.devices),
-            axis_name=spec_a._partitions[1],
+    # print(
+    #     jax.make_jaxpr(
+    #         jax.jit(
+    #             jax.shard_map(
+    #                 partial(
+    #                     _make_block_cyclic,
+    #                     T_A=T_A,
+    #                     ndev=len(mesh_a.devices),
+    #                     axis_name=spec_a._partitions[1],
+    #                 ),
+    #                 mesh=mesh_a,
+    #                 in_specs=spec_a,
+    #                 out_specs=spec_a,
+    #             ),
+    #             donate_argnums=(0,),
+    #         )
+    #     )(a)
+    # )
+    # exit()
+    return jax.jit(
+        jax.shard_map(
+            partial(
+                _make_block_cyclic,
+                T_A=T_A,
+                ndev=len(mesh_a.devices),
+                axis_name=spec_a._partitions[1],
+            ),
+            mesh=mesh_a,
+            in_specs=spec_a,
+            out_specs=spec_a,
         ),
-        mesh=mesh_a,
-        in_specs=spec_a,
-        out_specs=spec_a,
     )(a)
 
 
