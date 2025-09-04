@@ -103,4 +103,4 @@ def potrf(a, b, T_A, block_cyclic: bool = False):
         a = block_cyclic_relayout(a, T_A=T_A)
         jax.debug.print("after block-cyclic reshaping:\n{}", a)
 
-    return jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))
+    return jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))[0]
