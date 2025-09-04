@@ -37,13 +37,14 @@ devices = jax.devices("gpu")
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 8
-    T_A = 3
+    N = 2**13
+    NRHS = 1
+    T_A = 256
     dtype = jnp.float32
     A = jnp.diag(jnp.arange(N, dtype=dtype)+1)
     print(jnp.linalg.eigvalsh(A))
     print(A)
-    b = jnp.ones((N, 1), dtype=dtype)
+    b = jnp.ones((N, NRHS), dtype=dtype)
     ndev = len(devices)
     # Make mesh and place data
     mesh = jax.make_mesh((ndev,), ('x', ))

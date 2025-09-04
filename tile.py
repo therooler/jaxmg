@@ -38,7 +38,7 @@ devices = jax.devices("gpu")
 
 
 def main():
-    ndev = 1
+    ndev = 2
     N = 8
     T_A = 3
     shard_size = N // ndev
@@ -46,21 +46,23 @@ def main():
     shard_size_padded = shard_size + padding
     num_tiles = (N + T_A - 1) // T_A
     print(num_tiles)
-    dev = 0
-    k = dev
+    dev = 1
+    global_blk_id = dev
     tiles = []
     local_idx = 0
-    while k < num_tiles:
-        g_start = k * T_A
+    while global_blk_id < num_tiles:
+        g_start = global_blk_id * T_A
         print("gs", g_start)
+        print("global_blk_id" , global_blk_id)
         g_end = min(g_start + T_A, N)
         T_A_clip = g_end - g_start
         print("T_A_clip", T_A_clip)
+        # T_A_clip = min((global_blk_id +1) * T_A, N_A) - global_blk_id * T_A;
         l_start = local_idx * T_A
         l_end = l_start + T_A_clip
         tiles.append((l_start, l_end, g_start, g_end))
         local_idx += 1
-        k += ndev
+        global_blk_id += ndev
     print(tiles)
         # dev = mod_dev % ndev
         # tile_end = min(tile_start + T_A, N)
