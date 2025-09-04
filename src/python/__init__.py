@@ -27,6 +27,8 @@ def _load(module, libraries):
             except OSError as e:
                 raise OSError(f"Unable to load CUDA library {lib}") from e
 
+if jax.default_backend() != "gpu":
+    raise RuntimeError("JaxMg requires that jax is built with GPU support.")
 
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])
