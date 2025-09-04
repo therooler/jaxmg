@@ -97,7 +97,7 @@ namespace jax
         ffi::Error PotrfMgImpl(int64_t N, int64_t NRHS, int64_t batch_a,
                                gpuStream_t stream, ffi::ScratchAllocator &scratch,
                                ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
-                               ffi::Result<ffi::AnyBuffer> out)
+                               ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
             bool VERBOSE = false;                 // print matrices for debugging
@@ -125,7 +125,7 @@ namespace jax
             const int IA = 1; // index within a global matrix, base-1 (not used)
             const int JA = 1;
             const int T_A = std::min(tile_size, batch_a); // tile size of A
-            const int lda = N;         // leading dimension of local A
+            const int lda = N;                            // leading dimension of local A
 
             const int IB = 1; // index within a global matrix, base-1 (not used)
             const int JB = 1;
@@ -141,16 +141,19 @@ namespace jax
             const int ldb = N;                      // leading dimension of local b
 
             /* CUDA */
-            cudaLibMgMatrixDesc_t descrA; //CusolverMg matrix descriptors
+            cudaLibMgMatrixDesc_t descrA; // CusolverMg matrix descriptors
             cudaLibMgMatrixDesc_t descrB;
-            cudaLibMgGrid_t gridA; //CusolverMg grid descriptors
+            cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
             cudaLibMgGrid_t gridB;
-            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR; // Column major a la Scalapack
+            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
             FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
-            int info = 0; // Info used by cusolverMg calls
-            int64_t lwork_potrf = 0; // Workspace size used by cusolverMg calls
-            int64_t lwork_potrs = 0; 
+            int info = 0;                            // Info used by cusolverMg calls
+            cusolverStatus_t cusolver_status;        // Return status of cusolverMg calls
+            int cusolver_status_host;
+            auto status_data = status->typed_data(); // Status returned by potrf
+            int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
+            int64_t lwork_potrs = 0;
 
             /* Shared memory */
             static std::once_flag barrier_initialized; // Initialize barrier once between threads
@@ -311,11 +314,18 @@ namespace jax
             if (currentDevice == 0)
             {
                 // std::printf("Step 10: Solve A*X = B by POTRF and POTRS \n");
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
+                cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, traits<data_type>::cuda_data_type,
-                    reinterpret_cast<void **>(shmwork), *shmlwork, &info));
+                    reinterpret_cast<void **>(shmwork), *shmlwork, &info);
+
+                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
+                {
+                    cusolver_status_host = static_cast<int>(cusolver_status);
+                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
+                }
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
@@ -323,25 +333,31 @@ namespace jax
                 /* check if A is singular */
                 if (0 > info)
                 {
-                    std::printf("%d-th parameter is wrong \n", -info);
-                    exit(1);
+                    return ffi::Error::Internal(
+                        absl::StrFormat("unexpected error in cusolverMgPotrf, %d-th input parameter is wrong \n", -info));
                 }
 
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
-                                                         reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                         reinterpret_cast<void **>(shmB), IB, JB, descrB,
-                                                         traits<data_type>::cuda_data_type,
-                                                         reinterpret_cast<void **>(shmwork), *shmlwork,
-                                                         &info));
+                cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
+                                                  reinterpret_cast<void **>(shmA), IA, JA, descrA,
+                                                  reinterpret_cast<void **>(shmB), IB, JB, descrB,
+                                                  traits<data_type>::cuda_data_type,
+                                                  reinterpret_cast<void **>(shmwork), *shmlwork,
+                                                  &info);
 
+                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
+                {
+                    cusolver_status_host = -static_cast<int>(cusolver_status);
+                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
+                }
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
                 /* check if parameters are valid */
                 if (0 > info)
                 {
-                    printf("%d-th parameter is wrong \n", -info);
-                    exit(1);
+                    return ffi::Error::Internal(
+                        absl::StrFormat("unexpected error in cusolverMgPotrs, %d-th input parameter is wrong \n", -info));
                 }
             }
             /* sync all devices */
@@ -381,7 +397,7 @@ namespace jax
 
         ffi::Error PotrfMgDispatch(gpuStream_t stream, ffi::ScratchAllocator scratch,
                                    ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
-                                   ffi::Result<ffi::AnyBuffer> out)
+                                   ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             auto dataType = a.element_type();
 
@@ -395,7 +411,9 @@ namespace jax
                 return ffi::Error::InvalidArgument(
                     "The input and output to getrf must have the same element type");
             }
-            SOLVER_DISPATCH_IMPL(PotrfMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out);
+            FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "potrf"));
+
+            SOLVER_DISPATCH_IMPL(PotrfMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out, status);
 
             return ffi::Error::InvalidArgument(absl::StrFormat(
                 "Unsupported data type%s for potrf", absl::FormatStreamed(dataType)));
@@ -405,10 +423,11 @@ namespace jax
                                       ffi::Ffi::Bind()
                                           .Ctx<ffi::PlatformStream<gpuStream_t>>()
                                           .Ctx<ffi::ScratchAllocator>()
-                                          .Arg<ffi::AnyBuffer>() // A
-                                          .Arg<ffi::AnyBuffer>() // b
-                                          .Attr<int64_t>("T_A")  // tile size
-                                          .Ret<ffi::AnyBuffer>() // x
+                                          .Arg<ffi::AnyBuffer>()        // A
+                                          .Arg<ffi::AnyBuffer>()        // b
+                                          .Attr<int64_t>("T_A")         // tile size
+                                          .Ret<ffi::AnyBuffer>()        // x
+                                          .Ret<ffi::Buffer<ffi::S32>>() // status
         );
 
         // #undef SOLVER_DISPATCH_IMPL

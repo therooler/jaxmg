@@ -20,9 +20,9 @@ and packaging of the extension are useful for testing.
 import os
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["JAX_TRACEBACK_FILTERING"]="off"
+os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 import ctypes
-import time 
+import time
 import numpy as np
 
 import jax
@@ -41,22 +41,22 @@ devices = jax.devices("gpu")
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**17 # - 2**12
+    N = 2**5  # - 2**12
     print(N)
     NRHS = 1
-    T_A = 256
+    T_A = 2
     dtype = jnp.float32
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     ndev = len(devices)
     chunk_size = N // ndev
     mesh = jax.make_mesh((ndev,), ("x",))
-    if ndev>1:
+    if ndev > 1:
         @jax.jit
         @partial(jax.shard_map, mesh=mesh, in_specs=(), out_specs=P(None, "x"))
         def make_diag():
-            idx = jax.lax.axis_index("x")     # device index
-            col_start = idx * chunk_size      # global column offset
+            idx = jax.lax.axis_index("x")  # device index
+            col_start = idx * chunk_size  # global column offset
             # Allocate zeros of shape (N, chunk_size)
             local = jnp.zeros((N, chunk_size), dtype=dtype)
             # Global column indices handled by this shard
@@ -64,13 +64,14 @@ def main():
             # Rows = same as global cols (diagonal)
             rows = cols
             # Values for the diagonal
-            vals = cols + 1   # because your diag entries are 1..N
+            vals = cols + 1  # because your diag entries are 1..N
             # Scatter into local slice (adjust columns relative to col_start)
             local = local.at[(rows, cols - col_start)].set(vals)
             return local
+
         A = make_diag()
     else:
-        _A = jnp.diag(np.arange(N, dtype=dtype) + 1)
+        _A = jnp.diag(np.arange(N, dtype=dtype)+1)
         A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
 
     _b = jnp.ones((N, NRHS), dtype=dtype)
@@ -85,10 +86,12 @@ def main():
     #     print(f"Shard b {i} on device {shard.device}:")
     #     print(shard.data)
     # Reconstruct from getrf
-    out = potrf(A, b, T_A=T_A)
-    out.block_until_ready()
-    print("Computation done")
-    print(f"Output: {out}")
+    for i in range(2):
+        start = time.time()
+        out = potrf(A, b, T_A=T_A)
+        out.block_until_ready()
+        print(f"Done, elapsed time { time.time() - start} [s]")
+        # print(f"Output: {out}")
 
 
 if __name__ == "__main__":
