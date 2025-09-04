@@ -48,3 +48,9 @@ if any("gpu" == d.platform for d in jax.devices()):
       jax.block_until_ready(
           warmup(jnp.ones((jax.local_device_count(),)))
       )  # triggers NCCL setup
+
+from .potrf import potrf
+from .block_cyclic import (block_cyclic_relayout, manual_block_cyclic_layout, calculate_padding, calculate_valid_T_A)
+
+__all__ = ["potrf", 
+           "block_cyclic_relayout", "manual_block_cyclic_layout", "calculate_padding", "calculate_valid_T_A"]

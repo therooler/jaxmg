@@ -7,7 +7,7 @@ name = "jaxmg"
 version = "0.1.0"
 description = "Python wrapper around cusolverMg with JAX support"
 authors = [{name="Roeland Wiersema"}]
-dependencies = ["jax[cuda12]>=0.6.0,<=0.7.1"]
+dependencies = ["jax[cuda12]>=0.6.0,<=0.7.1", "pytest==8.2.1"]
 requires-python = ">=3.9"
 
 [tool.setuptools.packages.find]
