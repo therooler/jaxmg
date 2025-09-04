@@ -26,245 +26,254 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
- #pragma once
+#pragma once
 
- #include <cmath>
- #include <functional>
- #include <iostream>
- #include <random>
- #include <stdexcept>
- #include <string>
- 
- #include <cuComplex.h>
- #include <cuda_runtime_api.h>
- #include <cublas_api.h>
- #include <cusolverDn.h>
- #include <library_types.h>
- 
+#include <cmath>
+#include <functional>
+#include <iostream>
+#include <random>
+#include <stdexcept>
+#include <string>
 
-//  inline absl::Status CudaToStatus(cudaError_t err, const char* file, int line) {
-//     if (err == cudaSuccess) return absl::OkStatus();
-//     return absl::InternalError(
-//         absl::StrFormat("CUDA error %d (%s) at %s:%d",
-//                         static_cast<int>(err),
-//                         cudaGetErrorString(err),
-//                         file, line));
-//   }
-  
-//   inline absl::Status CusolverToStatus(cusolverStatus_t err, const char* file, int line) {
-//     if (err == CUSOLVER_STATUS_SUCCESS) return absl::OkStatus();
-//     return absl::InternalError(
-//         absl::StrFormat("cuSolver error %d at %s:%d",
-//                         static_cast<int>(err), file, line));
-//   }
-  
-//   #define CUDA_CHECK(expr) CudaToStatus((expr), __FILE__, __LINE__)
-//   #define CUSOLVER_CHECK(expr) CusolverToStatus((expr), __FILE__, __LINE__)
+#include <cuComplex.h>
+#include <cuda_runtime_api.h>
+#include <cublas_api.h>
+#include <cusolverDn.h>
+#include <library_types.h>
 
- // CUDA API error checking
- #define CUDA_CHECK(err)                                                                            \
-     do {                                                                                           \
-         cudaError_t err_ = (err);                                                                  \
-         if (err_ != cudaSuccess) {                                                                 \
-             printf("CUDA error %d at %s:%d\n", err_, __FILE__, __LINE__);                          \
-             throw std::runtime_error("CUDA error");                                                \
-         }                                                                                          \
-     } while (0)
- 
- // cusolver API error checking
- #define CUSOLVER_CHECK(err)                                                                        \
-     do {                                                                                           \
-         cusolverStatus_t err_ = (err);                                                             \
-         if (err_ != CUSOLVER_STATUS_SUCCESS) {                                                     \
-             printf("cusolver error %d at %s:%d\n", err_, __FILE__, __LINE__);                      \
-             throw std::runtime_error("cusolver error");                                            \
-         }                                                                                          \
-     } while (0)
- 
- // cublas API error checking
- #define CUBLAS_CHECK(err)                                                                          \
-     do {                                                                                           \
-         cublasStatus_t err_ = (err);                                                               \
-         if (err_ != CUBLAS_STATUS_SUCCESS) {                                                       \
-             printf("cublas error %d at %s:%d\n", err_, __FILE__, __LINE__);                        \
-             throw std::runtime_error("cublas error");                                              \
-         }                                                                                          \
-     } while (0)
- 
- // cublas API error checking
- #define CUSPARSE_CHECK(err)                                                                        \
-     do {                                                                                           \
-         cusparseStatus_t err_ = (err);                                                             \
-         if (err_ != CUSPARSE_STATUS_SUCCESS) {                                                     \
-             printf("cusparse error %d at %s:%d\n", err_, __FILE__, __LINE__);                      \
-             throw std::runtime_error("cusparse error");                                            \
-         }                                                                                          \
-     } while (0)
- 
- // memory alignment
- #define ALIGN_TO(A, B) (((A + B - 1) / B) * B)
- 
- // device memory pitch alignment
- static const size_t device_alignment = 32;
- 
- // type traits
- template <typename T> struct traits;
- 
- template <> struct traits<float> {
-     // scalar type
-     typedef float T;
-     typedef T S;
- 
-     static constexpr T zero = 0.f;
-     static constexpr cudaDataType cuda_data_type = CUDA_R_32F;
- #if CUDART_VERSION >= 11000
-     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_32F;
- #endif
- 
-     inline static S abs(T val) { return fabs(val); }
- 
-     template <typename RNG> inline static T rand(RNG &gen) { return (S)gen(); }
- 
-     inline static T add(T a, T b) { return a + b; }
- 
-     inline static T mul(T v, S f) { return v * f; }
- };
- 
- template <> struct traits<double> {
-     // scalar type
-     typedef double T;
-     typedef T S;
- 
-     static constexpr T zero = 0.;
-     static constexpr cudaDataType cuda_data_type = CUDA_R_64F;
- #if CUDART_VERSION >= 11000
-     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_64F;
- #endif
- 
-     inline static S abs(T val) { return fabs(val); }
- 
-     template <typename RNG> inline static T rand(RNG &gen) { return (S)gen(); }
- 
-     inline static T add(T a, T b) { return a + b; }
- 
-     inline static T mul(T v, S f) { return v * f; }
- };
- 
- template <> struct traits<cuFloatComplex> {
-     // scalar type
-     typedef float S;
-     typedef cuFloatComplex T;
- 
-     static constexpr T zero = {0.f, 0.f};
-     static constexpr cudaDataType cuda_data_type = CUDA_C_32F;
- #if CUDART_VERSION >= 11000
-     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_C_32F;
- #endif
- 
-     inline static S abs(T val) { return cuCabsf(val); }
- 
-     template <typename RNG> inline static T rand(RNG &gen) {
-         return make_cuFloatComplex((S)gen(), (S)gen());
-     }
- 
-     inline static T add(T a, T b) { return cuCaddf(a, b); }
-     inline static T add(T a, S b) { return cuCaddf(a, make_cuFloatComplex(b, 0.f)); }
- 
-     inline static T mul(T v, S f) { return make_cuFloatComplex(v.x * f, v.y * f); }
- };
- 
- template <> struct traits<cuDoubleComplex> {
-     // scalar type
-     typedef double S;
-     typedef cuDoubleComplex T;
- 
-     static constexpr T zero = {0., 0.};
-     static constexpr cudaDataType cuda_data_type = CUDA_C_64F;
- #if CUDART_VERSION >= 11000
-     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_C_64F;
- #endif
- 
-     inline static S abs(T val) { return cuCabs(val); }
- 
-     template <typename RNG> inline static T rand(RNG &gen) {
-         return make_cuDoubleComplex((S)gen(), (S)gen());
-     }
- 
-     inline static T add(T a, T b) { return cuCadd(a, b); }
-     inline static T add(T a, S b) { return cuCadd(a, make_cuDoubleComplex(b, 0.)); }
- 
-     inline static T mul(T v, S f) { return make_cuDoubleComplex(v.x * f, v.y * f); }
- };
- 
- template <typename T> void print_matrix(const int &m, const int &n, const T *A, const int &lda);
- 
- template <> void print_matrix(const int &m, const int &n, const float *A, const int &lda) {
-     for (int i = 0; i < m; i++) {
-         for (int j = 0; j < n; j++) {
-             std::printf("%0.2f ", A[j * lda + i]);
-         }
-         std::printf("\n");
-     }
- }
- 
- template <> void print_matrix(const int &m, const int &n, const double *A, const int &lda) {
-     for (int i = 0; i < m; i++) {
-         for (int j = 0; j < n; j++) {
-             std::printf("%0.2f ", A[j * lda + i]);
-         }
-         std::printf("\n");
-     }
- }
- 
- template <> void print_matrix(const int &m, const int &n, const cuComplex *A, const int &lda) {
-     for (int i = 0; i < m; i++) {
-         for (int j = 0; j < n; j++) {
-             std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
-         }
-         std::printf("\n");
-     }
- }
- 
- template <>
- void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const int &lda) {
-     for (int i = 0; i < m; i++) {
-         for (int j = 0; j < n; j++) {
-             std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
-         }
-         std::printf("\n");
-     }
- }
- 
- // Returns cudaDataType value as defined in library_types.h for the string containing type name
- cudaDataType get_cuda_library_type(std::string type_string) {
-     if (type_string.compare("CUDA_R_16F") == 0)
-         return CUDA_R_16F;
-     else if (type_string.compare("CUDA_C_16F") == 0)
-         return CUDA_C_16F;
-     else if (type_string.compare("CUDA_R_32F") == 0)
-         return CUDA_R_32F;
-     else if (type_string.compare("CUDA_C_32F") == 0)
-         return CUDA_C_32F;
-     else if (type_string.compare("CUDA_R_64F") == 0)
-         return CUDA_R_64F;
-     else if (type_string.compare("CUDA_C_64F") == 0)
-         return CUDA_C_64F;
-     else if (type_string.compare("CUDA_R_8I") == 0)
-         return CUDA_R_8I;
-     else if (type_string.compare("CUDA_C_8I") == 0)
-         return CUDA_C_8I;
-     else if (type_string.compare("CUDA_R_8U") == 0)
-         return CUDA_R_8U;
-     else if (type_string.compare("CUDA_C_8U") == 0)
-         return CUDA_C_8U;
-     else if (type_string.compare("CUDA_R_32I") == 0)
-         return CUDA_R_32I;
-     else if (type_string.compare("CUDA_C_32I") == 0)
-         return CUDA_C_32I;
-     else if (type_string.compare("CUDA_R_32U") == 0)
-         return CUDA_R_32U;
-     else if (type_string.compare("CUDA_C_32U") == 0)
-         return CUDA_C_32U;
-     else
-         throw std::runtime_error("Unknown CUDA datatype");
- }
+
+template <typename T_ELEM>
+static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
+                              int M,                                 /* number of rows in local A, B */
+                              int N_batch,                           /* number of columns in local A, B */
+                              /* input */
+                              const T_ELEM *h_B, /* device array, h_B is M-by-N_batch with leading dimension ldb  */
+                              int ldb,
+                              /* output */
+                              int N_A,                 /* number of columns of global A */
+                              int T_A,                 /* number of columns per column tile */
+                              int LLD_A,               /* leading dimension of local A */
+                              T_ELEM *array_d_A_packed /* device pointer array of dimension num_devices */
+)
+{
+    int currentDev = 0; /* record current device id */
+
+    /*  Quick return if possible */
+    if ((0 >= M) || (0 >= N_batch))
+    {
+        return;
+    }
+
+    /* consistent checking */
+    if (ldb < M)
+    {
+        throw std::runtime_error("Consistency Error.");
+    }
+
+    CUDA_CHECK(cudaGetDevice(&currentDev));
+    CUDA_CHECK(cudaDeviceSynchronize());
+
+    const int num_blks = ((N_batch * num_devices + T_A - 1) / T_A) / num_devices;
+
+    // std::printf("memcopyCyclic num_blks: %d\n", num_blks);
+    int nz_blks = 0;
+    int global_blk_id = currentDev;
+    int T_A_clip = 0;
+    for (int JA_blk_id = 0; JA_blk_id < num_blks; JA_blk_id++)
+    {
+        // std::printf("JA_blk_id: %d\n", JA_blk_id);
+        T_ELEM *d_A = array_d_A_packed + static_cast<size_t>(LLD_A) * T_A * nz_blks;
+        const T_ELEM *h_A = h_B + static_cast<size_t>(LLD_A) * T_A * nz_blks;
+        T_A_clip = min((global_blk_id + 1) * T_A, N_A) - global_blk_id * T_A;
+        // std::printf("nz_blks: %d\n", nz_blks);
+        // std::printf("N_A: %d, T_A: %d\n", N_A, T_A);
+        // std::printf("\tglobal_blk_id: %d, T_A_clip: %d\n", global_blk_id, T_A_clip);
+        if (T_A_clip <= 0)
+        {
+            break;
+        }
+        CUDA_CHECK(cudaMemcpy2D(d_A, /* dst */
+                                static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
+                                h_A, /* src */
+                                static_cast<size_t>(ldb) * sizeof(T_ELEM),
+                                static_cast<size_t>(M) * sizeof(T_ELEM),
+                                static_cast<size_t>(T_A_clip),
+                                cudaMemcpyDeviceToDevice));
+
+        // std::printf(" nbytes to copy: %d\n", static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A_clip));
+        // std::vector<T_ELEM> data_block(static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A_clip), 0);
+
+        // CUDA_CHECK(cudaMemcpy(data_block.data(), d_A, static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A_clip), gpuMemcpyDeviceToHost));
+        // for (int i = 0; i < static_cast<size_t>(LLD_A)* static_cast<size_t>(T_A_clip); i++)
+        // {
+        //     std::cout << "A:" << data_block[i] << std::endl;
+        // }
+        // for (int i = 0; i < static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A); i++)
+        // {
+        //     std::cout << data_block[i] << std::endl;
+        // }
+        nz_blks++;
+        global_blk_id += num_devices;
+    }
+
+    CUDA_CHECK(cudaDeviceSynchronize());
+}
+
+// type traits
+template <typename T>
+struct traits;
+
+template <>
+struct traits<float>
+{
+    // scalar type
+    typedef float T;
+    typedef T S;
+
+    static constexpr T zero = 0.f;
+    static constexpr cudaDataType cuda_data_type = CUDA_R_32F;
+#if CUDART_VERSION >= 11000
+    static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_32F;
+#endif
+
+    inline static S abs(T val) { return fabs(val); }
+
+    template <typename RNG>
+    inline static T rand(RNG &gen) { return (S)gen(); }
+
+    inline static T add(T a, T b) { return a + b; }
+
+    inline static T mul(T v, S f) { return v * f; }
+};
+
+template <>
+struct traits<double>
+{
+    // scalar type
+    typedef double T;
+    typedef T S;
+
+    static constexpr T zero = 0.;
+    static constexpr cudaDataType cuda_data_type = CUDA_R_64F;
+#if CUDART_VERSION >= 11000
+    static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_64F;
+#endif
+
+    inline static S abs(T val) { return fabs(val); }
+
+    template <typename RNG>
+    inline static T rand(RNG &gen) { return (S)gen(); }
+
+    inline static T add(T a, T b) { return a + b; }
+
+    inline static T mul(T v, S f) { return v * f; }
+};
+
+template <>
+struct traits<cuFloatComplex>
+{
+    // scalar type
+    typedef float S;
+    typedef cuFloatComplex T;
+
+    static constexpr T zero = {0.f, 0.f};
+    static constexpr cudaDataType cuda_data_type = CUDA_C_32F;
+#if CUDART_VERSION >= 11000
+    static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_C_32F;
+#endif
+
+    inline static S abs(T val) { return cuCabsf(val); }
+
+    template <typename RNG>
+    inline static T rand(RNG &gen)
+    {
+        return make_cuFloatComplex((S)gen(), (S)gen());
+    }
+
+    inline static T add(T a, T b) { return cuCaddf(a, b); }
+    inline static T add(T a, S b) { return cuCaddf(a, make_cuFloatComplex(b, 0.f)); }
+
+    inline static T mul(T v, S f) { return make_cuFloatComplex(v.x * f, v.y * f); }
+};
+
+template <>
+struct traits<cuDoubleComplex>
+{
+    // scalar type
+    typedef double S;
+    typedef cuDoubleComplex T;
+
+    static constexpr T zero = {0., 0.};
+    static constexpr cudaDataType cuda_data_type = CUDA_C_64F;
+#if CUDART_VERSION >= 11000
+    static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_C_64F;
+#endif
+
+    inline static S abs(T val) { return cuCabs(val); }
+
+    template <typename RNG>
+    inline static T rand(RNG &gen)
+    {
+        return make_cuDoubleComplex((S)gen(), (S)gen());
+    }
+
+    inline static T add(T a, T b) { return cuCadd(a, b); }
+    inline static T add(T a, S b) { return cuCadd(a, make_cuDoubleComplex(b, 0.)); }
+
+    inline static T mul(T v, S f) { return make_cuDoubleComplex(v.x * f, v.y * f); }
+};
+
+template <typename T>
+void print_matrix(const int &m, const int &n, const T *A, const int &lda);
+
+template <>
+void print_matrix(const int &m, const int &n, const float *A, const int &lda)
+{
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            std::printf("%0.2f ", A[j * lda + i]);
+        }
+        std::printf("\n");
+    }
+}
+
+template <>
+void print_matrix(const int &m, const int &n, const double *A, const int &lda)
+{
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            std::printf("%0.2f ", A[j * lda + i]);
+        }
+        std::printf("\n");
+    }
+}
+
+template <>
+void print_matrix(const int &m, const int &n, const cuComplex *A, const int &lda)
+{
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
+        }
+        std::printf("\n");
+    }
+}
+
+template <>
+void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const int &lda)
+{
+    for (int i = 0; i < m; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            std::printf("%0.2f + %0.2fj ", A[j * lda + i].x, A[j * lda + i].y);
+        }
+        std::printf("\n");
+    }
+}
