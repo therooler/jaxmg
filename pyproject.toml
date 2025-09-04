@@ -3,14 +3,15 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "potrf_pkg"
+name = "jaxmg"
 version = "0.1.0"
-description = "Python wrapper around libpotrf with JAX support"
-authors = [{name="Your Name", email="you@example.com"}]
+description = "Python wrapper around cusolverMg with JAX support"
+authors = [{name="Roeland Wiersema"}]
 dependencies = ["jax>=0.6.1"]
+requires-python = ">=3.9"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-potrf = ["libpotrf.so"]
+python = ["libpotrf.so"]
