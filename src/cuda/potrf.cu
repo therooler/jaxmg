@@ -83,7 +83,7 @@
 
 #include "jax_utils.h"
 #include "cusolver_utils.h"
-#include "cusolverMg_utils.h"
+// #include "cusolverMg_utils.h"
 #include "shm.h"
 
 #define JAX_FFI_RETURN_IF_GPU_ERROR(...) \
@@ -119,6 +119,7 @@ namespace jax
 
             /* maximum number of GPUs */
             const int MAX_NUM_DEVICES = 16;
+            bool VERBOSE = false;
 
             int nbGpus = 0;
             int currentDevice = 0;
@@ -142,7 +143,15 @@ namespace jax
 
             const int IB = 1;
             const int JB = 1;
-            const int T_B = std::min(static_cast<int>(NRHS), 10); /* tile size of B */
+
+            if (NRHS > 256)
+            {
+                return ffi::Error::InvalidArgument(
+                    absl::StrFormat("%s: Number of right hand sides must be <=256, received %d, "
+                                    "this may be improved in the next release",
+                                    source, NRHS));
+            }
+            const int T_B = static_cast<int>(NRHS); /* tile size of B */
             const int ldb = N;
 
             int info = 0;
@@ -188,36 +197,37 @@ namespace jax
 
                 /* (global) A is N-by-N */
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrA, N, /* number of rows of (global) A */
-                                                          N,          /* number of columns of (global) A */
-                                                          N,          /* number or rows in a tile */
-                                                          T_A,        /* number of columns in a tile */
-                                                          traits<data_type>::cuda_data_type, gridA));
+                                                                    N,          /* number of columns of (global) A */
+                                                                    N,          /* number or rows in a tile */
+                                                                    T_A,        /* number of columns in a tile */
+                                                                    traits<data_type>::cuda_data_type, gridA));
 
                 /* (global) B is N-by-NRHS */
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrB, N, /* number of rows of (global) B */
-                                                          NRHS,       /* number of columns of (global) B */
-                                                          N,          /* number or rows in a tile */
-                                                          T_B,        /* number of columns in a tile */
-                                                          traits<data_type>::cuda_data_type, gridB));
+                                                                    NRHS,       /* number of columns of (global) B */
+                                                                    N,          /* number or rows in a tile */
+                                                                    T_B,        /* number of columns in a tile */
+                                                                    traits<data_type>::cuda_data_type, gridB));
             }
-            std::printf("Step 3: Print data on host \n");
-
-            std::vector<data_type> A(batch_a * N, 0);
-            gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-            for (int i = 0; i < batch_a * N; i++)
+            if (VERBOSE)
             {
-                std::cout << A[i] << std::endl;
+                std::printf("Step 3: Print data on host \n");
+                std::vector<data_type> A(batch_a * N, 0);
+                gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
+                for (int i = 0; i < batch_a * N; i++)
+                {
+                    std::cout << A[i] << std::endl;
+                }
+
+                std::vector<data_type> B(batch_a * NRHS, 0);
+                gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
+
+                std::printf("%d: A = matlab base-1\n", currentDevice);
+
+                print_matrix(N, batch_a, A.data(), N);
+                std::printf("%d: b = matlab base-1\n", currentDevice);
+                print_matrix(NRHS, batch_a, B.data(), NRHS);
             }
-
-            std::vector<data_type> B(batch_a * NRHS, 0);
-            gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
-
-            std::printf("%d: A = matlab base-1\n", currentDevice);
-
-            print_matrix(N, batch_a, A.data(), N);
-            std::printf("%d: b = matlab base-1\n", currentDevice);
-            print_matrix(NRHS, batch_a, B.data(), NRHS);
-
             std::printf("Step 4: Allocate distributed matrices A and B \n");
 
             sharedMemoryInfo shminfoA;
@@ -229,67 +239,51 @@ namespace jax
             data_type **shmB = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoB, "shmB");
             data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
             int64_t *shmlwork = (int64_t *)get_shm_lwork_ptr(currentDevice, sync_point, shminfolwork, "shmlwork");
-            int64_t nbytes_A = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_A, lda);
-            int64_t nbytes_B = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_B, ldb);
-
-            // std::vector<data_type *> array_d_A(nbGpus, nullptr);
-            // std::vector<data_type *> array_d_B(nbGpus, nullptr);
-            // std::vector<data_type *> array_d_work(nbGpus, nullptr);
+            // int64_t nbytes_A = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_A, lda);
+            // int64_t nbytes_B = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_B, ldb);
 
             /* A := 0 */
-            // createMat<data_type>(nbGpus, deviceList.data(), N, /* number of columns of global A */
-            //                      T_A,                          /* number of columns per column tile */
-            //                      lda,                          /* leading dimension of local A */
-            //                                                    //  (shmA->device_ptrs),
-            //                                                    //  array_d_A.data(),
-            //                      shmA,
-            //                      scratch);
-            FFI_ASSIGN_OR_RETURN(auto workspaceA, AllocateWorkspaceBytes<data_type>(scratch, nbytes_A, "workspaceA"));
-            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            shmA[currentDevice] = workspaceA;
 
-            /* B := 0 */
-            // createMat<data_type>(nbGpus, deviceList.data(), NRHS, /* number of columns of global B */
-            //                      T_B,                             /* number of columns per column tile */
-            //                      ldb,                             /* leading dimension of local B */
-            //                      //  array_d_B.data(),
-            //                      shmB,
-            //                      scratch);
-            FFI_ASSIGN_OR_RETURN(auto workspaceB, AllocateWorkspaceBytes<data_type>(scratch, nbytes_B, "workspaceB"));
+            // FFI_ASSIGN_OR_RETURN(auto workspaceA, AllocateWorkspaceBytes<data_type>(scratch, nbytes_A, "workspaceA"));
             // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            shmB[currentDevice] = workspaceB;
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
+            // shmA[currentDevice] = workspaceA;
+            /* B := 0 */
+            // FFI_ASSIGN_OR_RETURN(auto workspaceB, AllocateWorkspaceBytes<data_type>(scratch, nbytes_B, "workspaceB"));
+            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
+            // shmB[currentDevice] = workspaceB;
+            // CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            // sync_point.arrive_and_wait();
             /*
             The example has the NxN matrix in host memory and then distributes it in chunks over the GPUs
             We have chunks of size NxBatch in device memory, and need to somehow move this to the expected layout
             for PotRf.
             */
-            std::printf("Step 8: Prepare data on devices \n");
-            std::cout << "memcpyH2D A" << std::endl;
-
+            std::printf("Step 8: Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
                                          /* output */
-                                         N,   /* number of columns of global A */
-                                         T_A, /* number of columns per column tile */
-                                         lda, /* leading dimension of local A */
-                                              //  array_d_A.data(), /* host pointer array of dimension nbGpus */
-                                         shmA);
+                                         N,           /* number of columns of global A */
+                                         T_A,         /* number of columns per column tile */
+                                         lda,         /* leading dimension of local A */
+                                         array_data_A /* device pointer for shard on device */
+            );
+            shmA[currentDevice] = array_data_A;
             if (currentDevice == 0)
             {
                 std::cout << "memcpyH2D b" << std::endl;
-                memcpyCyclic<data_type>(nbGpus, deviceList.data(), N, NRHS,
-                                        /* input */
-                                        array_data_b, ldb,
-                                        /* output */
-                                        1,   /* number of columns of global A */
-                                        T_B, /* number of columns per column tile */
-                                        ldb, /* leading dimension of local A */
-                                        //  array_d_B.data(), /* host pointer array of dimension nbGpus */
-                                        shmB);
+                memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, NRHS,
+                                             /* input */
+                                             array_data_b, ldb,
+                                             /* output */
+                                             1,           /* number of columns of global A */
+                                             T_B,         /* number of columns per column tile */
+                                             ldb,         /* leading dimension of local A */
+                                             array_data_b /* device pointer for shard on device */
+                );
+                shmB[currentDevice] = array_data_b;
             }
+            std::printf("currentdev done %d\n", currentDevice);
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -297,18 +291,18 @@ namespace jax
             if (currentDevice == 0)
             {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
-                                                          //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
-                                                          reinterpret_cast<void **>(shmA), IA, /* base-1 */
-                                                          JA,                                  /* base-1 */
-                                                          descrA, traits<data_type>::cuda_data_type, &lwork_potrf));
+                                                                    //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
+                                                                    reinterpret_cast<void **>(shmA), IA, /* base-1 */
+                                                                    JA,                                  /* base-1 */
+                                                                    descrA, traits<data_type>::cuda_data_type, &lwork_potrf));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrs_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
-                                                                                                      //   reinterpret_cast<void **>(array_d_A.data()), IA, JA,
-                                                          reinterpret_cast<void **>(shmA), IA, JA,
-                                                          //   descrA, reinterpret_cast<void **>(array_d_B.data()),
-                                                          descrA, reinterpret_cast<void **>(shmB),
-                                                          IB, JB, descrB, traits<data_type>::cuda_data_type,
-                                                          &lwork_potrs));
+                                                                                                                //   reinterpret_cast<void **>(array_d_A.data()), IA, JA,
+                                                                    reinterpret_cast<void **>(shmA), IA, JA,
+                                                                    //   descrA, reinterpret_cast<void **>(array_d_B.data()),
+                                                                    descrA, reinterpret_cast<void **>(shmB),
+                                                                    IB, JB, descrB, traits<data_type>::cuda_data_type,
+                                                                    &lwork_potrs));
                 *shmlwork = std::max(lwork_potrf, lwork_potrs);
             }
             sync_point.arrive_and_wait();
@@ -342,13 +336,13 @@ namespace jax
                 }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
-                                               reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                               //    reinterpret_cast<void **>(array_d_A.data()), IA, JA, descrA,
-                                               reinterpret_cast<void **>(shmB), IB, JB, descrB,
-                                               traits<data_type>::cuda_data_type,
-                                               reinterpret_cast<void **>(shmwork), *shmlwork,
-                                               &info /* host */
-                                               ));
+                                                         reinterpret_cast<void **>(shmA), IA, JA, descrA,
+                                                         //    reinterpret_cast<void **>(array_d_A.data()), IA, JA, descrA,
+                                                         reinterpret_cast<void **>(shmB), IB, JB, descrB,
+                                                         traits<data_type>::cuda_data_type,
+                                                         reinterpret_cast<void **>(shmwork), *shmlwork,
+                                                         &info /* host */
+                                                         ));
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
@@ -402,7 +396,9 @@ namespace jax
             // Columns are batched
             FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
             FFI_ASSIGN_OR_RETURN((const auto [N_b, NRHS]), SplitBatch1D(b.dimensions()));
-            FFI_RETURN_IF_ERROR(CheckShape(b.dimensions(), N, "b", "potrf"));
+            std::printf("N_b, NRHS %d %d\n", N_b, NRHS);
+            FFI_RETURN_IF_ERROR(CheckShape(b.dimensions(), {N, NRHS}, "b", "potrf"));
+            std::printf("This line hits");
             if (dataType != out->element_type())
             {
                 return ffi::Error::InvalidArgument(
