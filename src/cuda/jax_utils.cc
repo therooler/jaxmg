@@ -13,15 +13,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 ==============================================================================*/
 
+// Own code
 #include "jax_utils.h"
-
+// Abseil
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
+// JAXlib
 #include "jaxlib/gpu/gpu_kernel_helpers.h"
 #include "jaxlib/gpu/vendor.h"
 #include "jaxlib/gpu/handle_pool.h"
+// CUDA
 #include "third_party/gpus/cuda/include/cusolverMg.h"
-#include "third_party/gpus/cuda/include/cusolverDn.h"
+
 
 namespace jax {
 

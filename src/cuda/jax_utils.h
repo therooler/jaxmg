@@ -1,13 +1,25 @@
-#include "jaxlib/ffi_helpers.h"
-#include "xla/ffi/api/ffi.h"
+#ifndef JAXLIB_GPU_UTILS_H_
+#define JAXLIB_GPU_UTILS_H_
 
+// C++
+#include <cstdint>
+#include <cstdio>
+#include <stdexcept>
+#include <string_view>
+// Abseil
 #include "absl/status/statusor.h"
+#include "absl/status/status.h"
+#include "absl/strings/str_format.h"
+
+// JAXlib
+#include "jaxlib/ffi_helpers.h"
 #include "jaxlib/gpu/vendor.h"
 #include "jaxlib/gpu/handle_pool.h"
+// CUDA
 #include "third_party/gpus/cuda/include/cusolverMg.h"
-
-#ifndef JAXLIB_GPU_SOLVER_HANDLE_POOL_H_
-#define JAXLIB_GPU_SOLVER_HANDLE_POOL_H_
+#include "third_party/gpus/cuda/include/cuda_runtime.h"
+// XLA
+#include "xla/ffi/api/ffi.h"
 
 namespace jax
 {
@@ -97,4 +109,7 @@ inline absl::Status CusolverToStatus(cusolverStatus_t err, const char *file, int
     }                                                                   \
   } while (0)
 
-#endif // JAXLIB_GPU_SOLVER_HANDLE_POOL_H_
+#define JAX_FFI_RETURN_IF_GPU_ERROR(...) \
+  FFI_RETURN_IF_ERROR_STATUS(JAX_AS_STATUS(__VA_ARGS__))
+
+#endif // JAXLIB_GPU_UTILS_H_

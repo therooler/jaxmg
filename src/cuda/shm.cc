@@ -1,25 +1,19 @@
 
-#include <cstdlib>
-#include <string>
-#include "shm.h"
+#include "shm.h"        
+
+#include <cerrno>       
+#include <cstdio>       
+#include <cstring>      
+#include <cstdlib>      
+
+#include <fcntl.h>      
+#include <sys/mman.h>  
+#include <sys/types.h>  
+#include <unistd.h>     
 
 
 int sharedMemoryCreate(const char *name, size_t sz, sharedMemoryInfo *info) {
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-  info->size = sz;
-  info->shmHandle = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
-                                      PAGE_READWRITE, 0, (DWORD)sz, name);
-  if (info->shmHandle == 0) {
-    return GetLastError();
-  }
 
-  info->addr = MapViewOfFile(info->shmHandle, FILE_MAP_ALL_ACCESS, 0, 0, sz);
-  if (info->addr == NULL) {
-    return GetLastError();
-  }
-
-  return 0;
-#else
   int status = 0;
 
   info->size = sz;
@@ -40,25 +34,11 @@ int sharedMemoryCreate(const char *name, size_t sz, sharedMemoryInfo *info) {
   }
 
   return 0;
-#endif
+
 }
 
 int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info) {
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-  info->size = sz;
 
-  info->shmHandle = OpenFileMapping(FILE_MAP_ALL_ACCESS, FALSE, name);
-  if (info->shmHandle == 0) {
-    return GetLastError();
-  }
-
-  info->addr = MapViewOfFile(info->shmHandle, FILE_MAP_ALL_ACCESS, 0, 0, sz);
-  if (info->addr == NULL) {
-    return GetLastError();
-  }
-
-  return 0;
-#else
   info->size = sz;
 
   info->shmFd = shm_open(name, O_RDWR, 0777);
@@ -72,25 +52,16 @@ int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info) {
   }
 
   return 0;
-#endif
 }
 
 void sharedMemoryClose(sharedMemoryInfo *info) {
-#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
-  if (info->addr) {
-    UnmapViewOfFile(info->addr);
-  }
-  if (info->shmHandle) {
-    CloseHandle(info->shmHandle);
-  }
-#else
+
   if (info->addr) {
     munmap(info->addr, info->size);
   }
   if (info->shmFd) {
     close(info->shmFd);
   }
-#endif
 }
 
 // Definitions for DynamicBarrier methods
@@ -131,7 +102,7 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
         }
         shm = (T **)info.addr;
         memset((void *)shm, 0, shmSize);
-        printf("%d: Shared memory initialized\n", currentDevice);
+        // printf("%d: Shared memory initialized\n", currentDevice);
     }
 
     sync_point.arrive_and_wait(); // Barrier sync
@@ -144,7 +115,7 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
             exit(EXIT_FAILURE);
         }
         shm = (T **)info.addr;
-        printf("%d: Shared memory opened\n", currentDevice);
+        // printf("%d: Shared memory opened\n", currentDevice);
     }
 
     sync_point.arrive_and_wait();
@@ -179,7 +150,7 @@ int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedM
         }
         shm = (int64_t )info.addr;
         memset((void *)shm, 0, shmSize);
-        printf("%d: Shared memory initialized\n", currentDevice);
+        // printf("%d: Shared memory initialized\n", currentDevice);
     }
 
     sync_point.arrive_and_wait(); // Barrier sync
@@ -192,7 +163,7 @@ int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedM
             exit(EXIT_FAILURE);
         }
         shm = (int64_t )info.addr;
-        printf("%d: Shared memory opened\n", currentDevice);
+        // printf("%d: Shared memory opened\n", currentDevice);
     }
 
     sync_point.arrive_and_wait();

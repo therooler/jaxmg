@@ -26,21 +26,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#ifndef CUSOLVER_GPU_UTILS_H_
+#define CUSOLVER_GPU_UTILS_H_
 
+// C++
 #include <cmath>
-#include <functional>
-#include <iostream>
-#include <random>
 #include <stdexcept>
-#include <string>
-
-#include <cuComplex.h>
-#include <cuda_runtime_api.h>
-#include <cublas_api.h>
-#include <cusolverDn.h>
+#include <algorithm>
+#include <cstdio>
+#include <cstddef>
 #include <library_types.h>
-
+// Cusolver
+#include <third_party/gpus/cuda/include/cuComplex.h>
+#include <third_party/gpus/cuda/include/cusolverDn.h>
 
 template <typename T_ELEM>
 static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
@@ -84,7 +82,7 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
         // std::printf("JA_blk_id: %d\n", JA_blk_id);
         T_ELEM *d_A = array_d_A_packed + static_cast<size_t>(LLD_A) * T_A * nz_blks;
         const T_ELEM *h_A = h_B + static_cast<size_t>(LLD_A) * T_A * nz_blks;
-        T_A_clip = min((global_blk_id + 1) * T_A, N_A) - global_blk_id * T_A;
+        T_A_clip = std::min((global_blk_id + 1) * T_A, N_A) - global_blk_id * T_A;
         // std::printf("nz_blks: %d\n", nz_blks);
         // std::printf("N_A: %d, T_A: %d\n", N_A, T_A);
         // std::printf("\tglobal_blk_id: %d, T_A_clip: %d\n", global_blk_id, T_A_clip);
@@ -277,3 +275,5 @@ void print_matrix(const int &m, const int &n, const cuDoubleComplex *A, const in
         std::printf("\n");
     }
 }
+
+#endif // CUSOLVER_GPU_UTILS_H_
