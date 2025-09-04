@@ -25,15 +25,13 @@ def _load(module, libraries):
                 ctypes.cdll.LoadLibrary(path)
                 continue
             except OSError as e:
-                raise OSError(f"Unable to load CUDA library {lib}") from e
+                raise OSError(f"Unable to load CUDA library {lib}, is jax built with GPU support?") from e
 
-import jax
-if jax.default_backend() != "gpu":
-    raise RuntimeError("JaxMg requires that jax is built with GPU support.")
 
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])
 
+import jax
 import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
