@@ -86,12 +86,12 @@ def main():
     #     print(f"Shard b {i} on device {shard.device}:")
     #     print(shard.data)
     # Reconstruct from getrf
-    for i in range(2):
-        start = time.time()
-        out = potrf(A, b, T_A=T_A)
-        out.block_until_ready()
-        print(f"Done, elapsed time { time.time() - start} [s]")
-        # print(f"Output: {out}")
+    start = time.time()
+    b_before = b.copy()
+    out = potrf(A, b, T_A=T_A)
+    out.block_until_ready()
+    print(f"Done, elapsed time { time.time() - start} [s]")
+    assert jnp.allclose(b_before.flatten(), (A@out).flatten())
 
 
 if __name__ == "__main__":
