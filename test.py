@@ -34,7 +34,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.python.potrf import potrf
+from src.jaxmg.potrf import potrf
 
 devices = jax.devices("gpu")
 

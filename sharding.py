@@ -18,8 +18,8 @@ from jax.sharding import PartitionSpec as P, NamedSharding
 
 import numpy as np
 import matplotlib.pyplot as plt
-from src.python.block_cyclic import block_cyclic_relayout, manual_block_cyclic_layout
-from src.python.block_cyclic import calculate_padding, calculate_valid_T_A
+from src.jaxmg.block_cyclic import block_cyclic_relayout, manual_block_cyclic_layout
+from src.jaxmg.block_cyclic import calculate_padding, calculate_valid_T_A
 
 def visualize_sharded_matrix(sharded_array, T_A):
     """
