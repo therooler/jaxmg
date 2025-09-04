@@ -34,7 +34,6 @@ namespace jax
   }
 } // namespace jax
 
-
 inline absl::Status CudaToStatus(cudaError_t err, const char *file, int line)
 {
   if (err == cudaSuccess)
@@ -59,23 +58,43 @@ inline absl::Status CusolverToStatus(cusolverStatus_t err, const char *file, int
 #define CUSOLVER_CHECK_STATUS(expr) CusolverToStatus((expr), __FILE__, __LINE__)
 
 // Compose CUDA_CHECK with FFI return.
-#define CUDA_CHECK_OR_RETURN(...) \
-  do {                            \
-    FFI_RETURN_IF_ERROR_STATUS(   \
-      CUDA_CHECK_STATUS(__VA_ARGS__)); \
+#define CUDA_CHECK_OR_RETURN(...)        \
+  do                                     \
+  {                                      \
+    FFI_RETURN_IF_ERROR_STATUS(          \
+        CUDA_CHECK_STATUS(__VA_ARGS__)); \
   } while (0)
 
 // Compose CUSOLVER_CHECK with FFI return.
-#define CUSOLVER_CHECK_OR_RETURN(...) \
-  do {                                 \
-    FFI_RETURN_IF_ERROR_STATUS(        \
-      CUSOLVER_CHECK_STATUS(__VA_ARGS__));  \
+#define CUSOLVER_CHECK_OR_RETURN(...)        \
+  do                                         \
+  {                                          \
+    FFI_RETURN_IF_ERROR_STATUS(              \
+        CUSOLVER_CHECK_STATUS(__VA_ARGS__)); \
   } while (0)
 
-// Usage
-// #define CUDA_CHECK(expr) \
-//   CudaToStatus((expr), __FILE__, __LINE__)
-// #define CUSOLVER_CHECK(expr) \
-//   CusolverToStatus((expr), __FILE__, __LINE__)
+// CUDA API error checking
+#define CUDA_CHECK(err)                                             \
+  do                                                                \
+  {                                                                 \
+    cudaError_t err_ = (err);                                       \
+    if (err_ != cudaSuccess)                                        \
+    {                                                               \
+      printf("CUDA error %d at %s:%d\n", err_, __FILE__, __LINE__); \
+      throw std::runtime_error("CUDA error");                       \
+    }                                                               \
+  } while (0)
+
+// cusolver API error checking
+#define CUSOLVER_CHECK(err)                                             \
+  do                                                                    \
+  {                                                                     \
+    cusolverStatus_t err_ = (err);                                      \
+    if (err_ != CUSOLVER_STATUS_SUCCESS)                                \
+    {                                                                   \
+      printf("cusolver error %d at %s:%d\n", err_, __FILE__, __LINE__); \
+      throw std::runtime_error("cusolver error");                       \
+    }                                                                   \
+  } while (0)
 
 #endif // JAXLIB_GPU_SOLVER_HANDLE_POOL_H_
