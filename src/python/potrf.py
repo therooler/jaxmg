@@ -89,18 +89,17 @@ def potrf(a, b, T_A, block_cyclic: bool = False):
             ),
             output_layouts=((1, 0),),
         )(_a, _b, T_A=int(T_A))
-        return lambda _a, _b: jax.shard_map(
+        return jax.jit(lambda _a, _b: jax.shard_map(
             fn,
             mesh=mesh_a,
             in_specs=(spec_a, spec_b),
             out_specs=spec_b,
             check_vma=False,
-        )(_a, _b)
+        )(_a, _b))
 
     if not block_cyclic and len(mesh_a.devices)>1:
         check_matrix_validity(a.shape[0], len(mesh_a.devices))
-        jax.debug.print("before block-cyclic reshaping:\n{}", a)
+        print("Starting block cyclic")
         a = block_cyclic_relayout(a, T_A=T_A)
-        jax.debug.print("after block-cyclic reshaping:\n{}", a)
-
+        print("Done with block cyclic")
     return jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))[0]
