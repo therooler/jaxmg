@@ -2,9 +2,15 @@ import importlib
 import pathlib
 import ctypes
 import warnings
+import sys
 
 from functools import partial
 from .utils import JaxMgWarning
+
+if sys.platform.startswith("linux"):
+    libname = "libpotrf.so"
+else:
+    raise RuntimeError(f"Unsupported platform {sys.platform}, only Linux is supported.")
 
 def _load(module, libraries):
     try:
