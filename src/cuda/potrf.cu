@@ -124,7 +124,7 @@ namespace jax
             /* Tiling sizes */
             const int IA = 1; // index within a global matrix, base-1 (not used)
             const int JA = 1;
-            const int T_A = tile_size; // tile size of A
+            const int T_A = std::min(tile_size, batch_a); // tile size of A
             const int lda = N;         // leading dimension of local A
 
             const int IB = 1; // index within a global matrix, base-1 (not used)
@@ -156,6 +156,7 @@ namespace jax
             static std::once_flag barrier_initialized; // Initialize barrier once between threads
             std::call_once(barrier_initialized, [&]()
                            { sync_point.initialize(nbGpus); });
+            sync_point.arrive_and_wait();
             sharedMemoryInfo shminfoA; // Shared memory info for device pointers to local matrices
             sharedMemoryInfo shminfoB;
             sharedMemoryInfo shminfowork;

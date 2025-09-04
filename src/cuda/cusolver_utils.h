@@ -40,6 +40,7 @@
 #include <third_party/gpus/cuda/include/cuComplex.h>
 #include <third_party/gpus/cuda/include/cusolverDn.h>
 
+
 template <typename T_ELEM>
 static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
                               int M,                                 /* number of rows in local A, B */
