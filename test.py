@@ -18,11 +18,15 @@ and packaging of the extension are useful for testing.
 """
 
 import os
-import ctypes
 
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["JAX_TRACEBACK_FILTERING"]="off"
+import ctypes
+import time 
 import numpy as np
 
 import jax
+
 jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
@@ -31,37 +35,61 @@ import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 from src.python.potrf import potrf
-devices = jax.devices("gpu")
 
+devices = jax.devices("gpu")
 
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**13
+    N = 2**17 # - 2**12
+    print(N)
     NRHS = 1
     T_A = 256
     dtype = jnp.float32
-    A = jnp.diag(jnp.arange(N, dtype=dtype)+1)
-    print(jnp.linalg.eigvalsh(A))
-    print(A)
-    b = jnp.ones((N, NRHS), dtype=dtype)
-    ndev = len(devices)
-    # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ('x', ))
-    A = jax.device_put(A, NamedSharding(mesh, P(None, 'x')))
-    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+    print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
-    for i, shard in enumerate(A.addressable_shards):
-        print(f"Shard A {i} on device {shard.device}:")
-        print(shard.data)
-    for i, shard in enumerate(b.addressable_shards):
-        print(f"Shard b {i} on device {shard.device}:")
-        print(shard.data)
+    ndev = len(devices)
+    chunk_size = N // ndev
+    mesh = jax.make_mesh((ndev,), ("x",))
+    if ndev>1:
+        @jax.jit
+        @partial(jax.shard_map, mesh=mesh, in_specs=(), out_specs=P(None, "x"))
+        def make_diag():
+            idx = jax.lax.axis_index("x")     # device index
+            col_start = idx * chunk_size      # global column offset
+            # Allocate zeros of shape (N, chunk_size)
+            local = jnp.zeros((N, chunk_size), dtype=dtype)
+            # Global column indices handled by this shard
+            cols = jax.lax.iota(jnp.int32, chunk_size) + col_start
+            # Rows = same as global cols (diagonal)
+            rows = cols
+            # Values for the diagonal
+            vals = cols + 1   # because your diag entries are 1..N
+            # Scatter into local slice (adjust columns relative to col_start)
+            local = local.at[(rows, cols - col_start)].set(vals)
+            return local
+        A = make_diag()
+    else:
+        _A = jnp.diag(np.arange(N, dtype=dtype) + 1)
+        A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
+
+    _b = jnp.ones((N, NRHS), dtype=dtype)
+    b = jax.device_put(_b, NamedSharding(mesh, P(None, None)))
+
+    print("Mat put on device")
+    # time.sleep(5)
+    # for i, shard in enumerate(A.addressable_shards):
+    #     print(f"Shard A {i} on device {shard.device}:")
+    #     print(shard.data)
+    # for i, shard in enumerate(b.addressable_shards):
+    #     print(f"Shard b {i} on device {shard.device}:")
+    #     print(shard.data)
     # Reconstruct from getrf
     out = potrf(A, b, T_A=T_A)
+    out.block_until_ready()
+    print("Computation done")
     print(f"Output: {out}")
 
 
 if __name__ == "__main__":
     main()
-   
