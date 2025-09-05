@@ -1,8 +1,45 @@
 # Distributed Linear Solver with CusolveMg and Jax
 
-This code provides a C++ interface between CusolveMg, a distributed linear solver
+This code provides a C++ interface between jax and cusolverMg, a distributed linear solver
 provided by NVIDIA. Calling the distributed solver requires laying out matrices in
 1D block cyclic form, which we handle on the Jax side with a single all-to-all call in
 combination with `jax.shard_map`. 
 
-We require `jax>=0.6.1` and building from source requires a C++17 compiler, CUDA Toolkit >=12.3
+The provided binary is compiled with `gcc==11.5.0`, `cuda==12.8.0` and `cudnn=9.2.0.82-12`.
+
+Note that jax comes shipped with CUDA 12.x these days, and so I rely on the shipped binaries
+that come with jax.
+
+## Install
+
+To install, clone the repo and in the source root use:
+
+```bash
+pip install .
+```
+
+To verify the package (requires one or more available GPUs), run the pytest command in the source root:
+
+```bash
+pytest 
+```
+
+## Development
+
+If you want to compile from source for development reasons, then from the source root use:
+
+```bash
+mkdir build
+cd build
+cmake ..
+cmake --build . --target install
+```
+
+which will install the CUDA binaries into `src/jaxmg/bin`. We rely on [CPM-CMAKE](https://github.com/cpm-cmake/CPM.cmake) 
+for managing the packages we rely on (abseil-cpp, jaxlib, XLA) for compilation. Compilation will require at least C++17.
+
+## Citation
+
+## Acknowledgements
+I acknowledge support from the Flatiron Institute. The Flatiron Institute is a
+division of the Simons Foundation.
