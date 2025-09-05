@@ -11,7 +11,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
-from src.jaxmg.block_cyclic import (
+from jaxmg import (
     block_cyclic_relayout,
     manual_block_cyclic_layout,
     calculate_padding,

@@ -98,3 +98,9 @@ CUDA::cupti
 ${CUSOLVERMG_LIB} # Can we remove this?
 cuda
 )
+
+install(TARGETS potrf
+    LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
+)
+
+# cmake --build . --target install

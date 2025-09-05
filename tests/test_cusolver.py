@@ -12,7 +12,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
-from src.jaxmg.potrf import potrf
+from jaxmg import potrf
 
 
 if any("gpu" == d.platform for d in jax.devices()):

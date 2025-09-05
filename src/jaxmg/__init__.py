@@ -7,9 +7,7 @@ import sys
 from functools import partial
 from .utils import JaxMgWarning
 
-if sys.platform.startswith("linux"):
-    libname = "libpotrf.so"
-else:
+if not sys.platform.startswith("linux"):
     raise RuntimeError(f"Unsupported platform {sys.platform}, only Linux is supported.")
 
 def _load(module, libraries):
@@ -26,7 +24,6 @@ def _load(module, libraries):
                 continue
             except OSError as e:
                 raise OSError(f"Unable to load CUDA library {lib}, is jax built with GPU support?") from e
-
 
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])

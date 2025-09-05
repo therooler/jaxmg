@@ -31,7 +31,7 @@ from .utils import get_mesh_and_spec_from_array, check_matrix_validity
 from .block_cyclic import block_cyclic_relayout
 
 # Load the shared library with the FFI target definitions
-SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "libpotrf.so")
+SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotrf.so")
 library = ctypes.cdll.LoadLibrary(SHARED_LIBRARY)
 
 jax.ffi.register_ffi_target(
