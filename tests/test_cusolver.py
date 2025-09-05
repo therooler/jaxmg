@@ -31,8 +31,8 @@ if any("gpu" == d.platform for d in jax.devices()):
         # Reconstruct from getrf
         out = potrf(A, b, T_A=T_A)
         expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
-        print(f"Output: {out}")
-        print(f"Expected: {expected_out}")
+        # print(f"Output: {out}")
+        # print(f"Expected: {expected_out}")
         assert jnp.allclose(out.flatten(), expected_out)
 
     devices = jax.devices()
