@@ -94,7 +94,7 @@ namespace jax
         break;                            \
     }
         template <typename data_type>
-        ffi::Error PotrfMgImpl(int64_t N, int64_t NRHS, int64_t batch_a,
+        ffi::Error PotriMgImpl(int64_t N, int64_t NRHS, int64_t batch_a,
                                gpuStream_t stream, ffi::ScratchAllocator &scratch,
                                ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
@@ -413,13 +413,13 @@ namespace jax
             }
             FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "potrf"));
 
-            SOLVER_DISPATCH_IMPL(PotrfMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out, status);
+            SOLVER_DISPATCH_IMPL(PotriMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out, status);
 
             return ffi::Error::InvalidArgument(absl::StrFormat(
                 "Unsupported data type%s for potrf", absl::FormatStreamed(dataType)));
         }
 
-        XLA_FFI_DEFINE_HANDLER_SYMBOL(MgFfi, PotrfMgDispatch,
+        XLA_FFI_DEFINE_HANDLER_SYMBOL(PotrfMgFFI, PotrfMgDispatch,
                                       ffi::Ffi::Bind()
                                           .Ctx<ffi::PlatformStream<gpuStream_t>>()
                                           .Ctx<ffi::ScratchAllocator>()
@@ -430,7 +430,7 @@ namespace jax
                                           .Ret<ffi::Buffer<ffi::S32>>() // status
         );
 
-        // #undef SOLVER_DISPATCH_IMPL
+#undef SOLVER_DISPATCH_IMPL
 
     } // namespace JAX_GPU_NAMESPACE
 } // namespace jax

@@ -28,14 +28,14 @@ from jax import Array
 from jax.sharding import PartitionSpec as P
 
 from .utils import get_mesh_and_spec_from_array, check_matrix_validity
-from .block_cyclic import block_cyclic_relayout
+from .cyclic_1d import cyclic_1d_layout
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotrf.so")
 library = ctypes.cdll.LoadLibrary(SHARED_LIBRARY)
 
 jax.ffi.register_ffi_target(
-    "potrf_mg", jax.ffi.pycapsule(library.MgFfi), platform="CUDA"
+    "potrf_mg", jax.ffi.pycapsule(library.PotrfMgFFI), platform="CUDA"
 )
 
 
@@ -43,7 +43,7 @@ def potrf(
     a: Array,
     b: Array,
     T_A: int,
-    block_cyclic: bool = False,
+    cyclic_1d: bool = False,
     return_status: bool = False,
 ):
     """
@@ -53,18 +53,18 @@ def potrf(
     If `a` is not postive-definite, CusolverMg will fail and raise an error.
     If `a` is not symmetric, CusolverMg will fail and raise an error.
 
-    If `block_cyclic` is set to True but the input arrays are not sharded in a block-cyclic manner,
+    If `cyclic_1d` is set to True but the input arrays are not sharded in a cyclic 1d manner,
     the data layout will be wrong and the kernel will fail since `a` will likely not be positve definite with the
     given data layout.
 
-    If the provided matrix is not positive definite, or correctly sharded (even though `block_cyclic` is True),
+    If the provided matrix is not positive definite, or correctly sharded (even though `cyclic_1d` is True),
     the returned result will be NaN.
 
     Args:
         a: A 2D array representing the matrix to be decomposed.
         b: A 2D array representing the right-hand side of the linear system.
-        T_A: Tile size used for block-cyclic layout. Only used if `block_cyclic` is True.
-        block_cyclic: If True, guarantees that the input arrays are sharded in a block-cyclic manner.
+        T_A: Tile size used for cyclic 1d layout. Only used if `cyclic_1d` is True.
+        cyclic_1d: If True, guarantees that the input arrays are sharded in a cyclic manner.
                       If False, the arrays are expected to be sharded along the columns of `a` and replicated for `b`.
         return_status: If True, returns a tuple (x, status) where `status` is an integer indicating the success or failure of the computation.
             If status>0, the integer corresponds to the cusolverStatus_t returned by cusolverMgPotrf.
@@ -118,11 +118,11 @@ def potrf(
             )(_a, _b),
         )
 
-    if not block_cyclic and len(mesh_a.devices) > 1:
+    if not cyclic_1d and len(mesh_a.devices) > 1:
         check_matrix_validity(a.shape[0], len(mesh_a.devices))
-        print("Starting block cyclic")
-        a = block_cyclic_relayout(a, T_A=T_A)
-        print("Done with block cyclic")
+        print("Starting cyclic 1d")
+        a = cyclic_1d_layout(a, T_A=T_A)
+        print("Done with cyclic 1d")
     out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))
     if return_status:
         return out, status[0]
