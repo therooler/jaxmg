@@ -41,7 +41,6 @@ if any("gpu" == d.platform for d in jax.devices()):
 
     if ndev == 1:
         print("Running block_cyclic test with 1 device.")
-
         @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (4, 8, 10, 12))
