@@ -10,6 +10,7 @@ from .utils import JaxMgWarning
 if not sys.platform.startswith("linux"):
     raise RuntimeError(f"Unsupported platform {sys.platform}, only Linux is supported.")
 
+
 def _load(module, libraries):
     try:
         m = importlib.import_module(f"nvidia.{module}")
@@ -23,7 +24,10 @@ def _load(module, libraries):
                 ctypes.cdll.LoadLibrary(path)
                 continue
             except OSError as e:
-                raise OSError(f"Unable to load CUDA library {lib}, is jax built with GPU support?") from e
+                raise OSError(
+                    f"Unable to load CUDA library {lib}, is jax built with GPU support?"
+                ) from e
+
 
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])
@@ -34,20 +38,37 @@ import jax.numpy as jnp
 jax.config.update("jax_enable_x64", True)
 
 if any("gpu" == d.platform for d in jax.devices()):
+
     @partial(jax.pmap, axis_name="d")
     def warmup(x):
         return jax.lax.psum(x, "d")
+
     if len(jax.devices("gpu")) > 1:
-      warnings.warn(
-          f"Multiple GPUs detected, initializing communication primitives...",          JaxMgWarning,
-          stacklevel=2,
-      )
-      jax.block_until_ready(
-          warmup(jnp.ones((jax.local_device_count(),)))
-      )  # triggers NCCL setup
+        warnings.warn(
+            f"Multiple GPUs detected, initializing communication primitives...",
+            JaxMgWarning,
+            stacklevel=2,
+        )
+        jax.block_until_ready(
+            warmup(jnp.ones((jax.local_device_count(),)))
+        )  # triggers NCCL setup
 
 from .potrf import potrf
-from .block_cyclic import (block_cyclic_relayout, manual_block_cyclic_layout, calculate_padding, calculate_valid_T_A)
+from .potri import potri
+from .cyclic_1d import (
+    cyclic_1d_layout,
+    undo_cyclic_1d_layout,
+    manual_cyclic_1d_layout,
+    calculate_padding,
+    calculate_valid_T_A,
+)
 
-__all__ = ["potrf", 
-           "block_cyclic_relayout", "manual_block_cyclic_layout", "calculate_padding", "calculate_valid_T_A"]
+__all__ = [
+    "potrf",
+    "potri",
+    "cyclic_1d_layout",
+    "undo_cyclic_1d_layout",
+    "manual_cyclic_1d_layout",
+    "calculate_padding",
+    "calculate_valid_T_A",
+]
