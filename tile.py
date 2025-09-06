@@ -31,7 +31,7 @@ import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 from src.jaxmg.potrf import potrf
-from src.jaxmg.block_cyclic import calculate_padding, calculate_valid_T_A
+from jaxmg.cyclic_1d import calculate_padding, calculate_valid_T_A
 
 devices = jax.devices("gpu")
 

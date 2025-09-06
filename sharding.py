@@ -18,97 +18,136 @@ from jax.sharding import PartitionSpec as P, NamedSharding
 
 import numpy as np
 import matplotlib.pyplot as plt
-from src.jaxmg.block_cyclic import block_cyclic_relayout, manual_block_cyclic_layout
-from src.jaxmg.block_cyclic import calculate_padding, calculate_valid_T_A
+from jaxmg.cyclic_1d import cyclic_1d_layout, manual_cyclic_1d_layout
+from src.jaxmg.cyclic_1d import calculate_padding, calculate_valid_T_A, undo_cyclic_1d_layout, validate_padding
 
-def visualize_sharded_matrix(sharded_array, T_A):
+from matplotlib.colors import ListedColormap, BoundaryNorm
+from matplotlib.patches import Patch
+
+def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     """
-    Visualizes a sharded JAX array highlighting shards and tiles.
-    Each shard gets a distinct color; tile boundaries are shown as grid lines.
+    Visualize global column ownership (by device id) before and after converting
+    column-block sharding to 1D block-cyclic with tile size T_A across ndev devices.
+
+    - Before (axs[0]): contiguous blocks of size `shard_size` per device.
+    - After  (axs[1]): tiles of width `T_A` assigned round-robin to devices.
+      Any right-side padding added to make the total width a multiple of `T_A`
+      is shown in light gray.
+
+    Args:
+      shard_size: number of columns per device in the block-sharded layout.
+      T_A:        tile width for the cyclic layout.
+      ndev:       number of devices.
+      N_rows:     number of matrix rows to draw (purely visual; content is repetitive).
+
+    Returns:
+      fig, axs: matplotlib Figure and Axes array (axs[0] = before, axs[1] = after).
     """
-    # Collect shards into a single full matrix and record shard ownership per column
-    shards = [np.array(s.data) for s in sharded_array.addressable_shards]
-    ndev = len(shards)
-    full_rows = shards[0].shape[0]
-    full_cols = sum(s.shape[1] for s in shards)
+    shard_size = N // ndev
+    if shard_size < 1 or T_A < 1 or ndev < 1:
+        raise ValueError("shard_size, T_A, and ndev must be positive integers.")
+    
+    total_cols = ndev * shard_size
+    # Before: device d owns columns [d*shard_size:(d+1)*shard_size)
+    before = np.zeros((N_rows, total_cols), dtype=int)
+    for d in range(ndev):
+        before[:, d * shard_size : (d + 1) * shard_size] = d
 
-    # Build a "mask" where each column's value = shard index + 1
-    mask = np.zeros((full_rows, full_cols), dtype=int)
-    col_offset = 0
-    for shard_idx, shard in enumerate(shards):
-        mask[:, col_offset : col_offset + shard.shape[1]] = shard_idx + 1
-        col_offset += shard.shape[1]
+    # After: 1D block-cyclic by tiles; pad to multiple of T_A
+    
+    pad = calculate_padding(shard_size, T_A, ndev)
+    validate_padding(pad, ndev, shard_size, T_A)
+    total_cols_padded = total_cols + pad * ndev
+    after = np.full((N_rows, total_cols_padded), fill_value=ndev, dtype=int)  # 'ndev' = padding label
 
-    fig, ax = plt.subplots(figsize=(8, 6))
-    cmap = plt.get_cmap("tab20", ndev)
-    im = ax.imshow(mask, cmap=cmap, vmin=0.5, vmax=ndev + 0.5)
+    # Assign device per T_A tile: tile k → device (k % ndev)
+    n_tiles = total_cols_padded // T_A
+    for k in range(n_tiles):
+        dev = k % ndev
+        start = k * T_A
+        end = start + T_A
+        after[:, start:end] = dev
 
-    # Draw vertical tile boundaries
-    for col in range(0, full_cols, T_A):
-        ax.axvline(col - 0.5, color="black", linewidth=0.5)
-    # Draw horizontal tile boundaries (optional, for square tiles)
-    for row in range(0, full_rows, T_A):
-        ax.axhline(row - 0.5, color="black", linewidth=0.5)
+    # But mark actual padding columns as padding label
+    if pad:
+        after[:, total_cols:] = ndev  # padding
 
-    ax.set_title("Sharded Matrix Layout\nColors = Shards, Lines = Tiles")
-    ax.set_xlabel("Columns")
-    ax.set_ylabel("Rows")
+    # ---- Plotting ----
+    # Build a colormap: ndev distinct device colors + 1 gray for padding
+    device_colors = plt.cm.tab20.colors  # plenty of distinct colors
+    colors = list(device_colors[:ndev]) + [(0.85, 0.85, 0.85, 1.0)]  # last entry for padding
+    cmap = ListedColormap(colors)
+    bounds = list(range(ndev + 2))  # 0..ndev-1 device ids, ndev = padding
+    norm = BoundaryNorm(bounds, cmap.N)
 
-    cbar = fig.colorbar(im, ticks=range(1, ndev + 1))
-    cbar.set_label("Shard Index")
-    plt.savefig("mat.pdf")
-    plt.show()
+    fig, axs = plt.subplots(1, 2, figsize=(14, 4), constrained_layout=True)
+
+    im0 = axs[0].imshow(before, aspect='auto', interpolation='nearest', cmap=cmap, norm=norm)
+    axs[0].set_title(f"Before: Column-block sharded\n(ndev={ndev}, shard_size={shard_size}, "
+                     f"expanded size={total_cols_padded}={total_cols_padded//(ndev*T_A)}*ndev*T_A)")
+    axs[0].set_xlabel("Columns")
+    axs[0].set_ylabel("Rows")
+
+    # Grid lines for device boundaries in the block layout
+    for d in range(1, ndev):
+        axs[0].axvline(d * shard_size - 0.5, lw=1, ls='--', alpha=0.6)
+
+    # ---- Shared x-axis ticks every T_A ----
+    max_cols = max(total_cols, total_cols_padded)
+    xticks = np.arange(0, max_cols + 1, T_A)
+    for ax in axs:
+        ax.set_xticks(xticks -0.5)
+        ax.set_xticklabels(xticks, fontsize=8)
+        ax.set_yticks([])
+
+    im1 = axs[1].imshow(after, aspect='auto', interpolation='nearest', cmap=cmap, norm=norm)
+    axs[1].set_title(f"After: 1D block-cyclic (tile={T_A})\n(pad per dev ={pad})")
+    axs[1].set_xlabel("Columns")
+
+    # Grid lines for tile boundaries
+    for t in range(1, n_tiles):
+        axs[1].axvline(t * T_A - 0.5, lw=0.8, ls=':', alpha=0.5)
+    # Vertical line separating real data from padding (if any)
+    if pad:
+        axs[1].axvline(total_cols - 0.5, lw=1.2, ls='--', color='k', alpha=0.8)
+
+    # Legend: one entry per device + padding
+    legend_handles = [Patch(facecolor=colors[d], edgecolor='k', label=f"dev {d}") for d in range(ndev)]
+    legend_handles.append(Patch(facecolor=colors[-1], edgecolor='k', label="padding"))
+    axs[1].legend(handles=legend_handles, loc='upper right', frameon=True)
+
+
+    return fig, axs
+
+# Example usage:
+# fig, axs = plot_block_to_cyclic(shard_size=12, T_A=4, ndev=3, N_rows=6)
+# plt.show()
+
 
 
 if __name__ == "__main__":
-    T_A = 128
-    ndev = 8
-    for N in range(ndev,10000, ndev):
-        shard_size = N // ndev
-        padding = calculate_padding(shard_size, T_A, ndev)
-        if (ndev - 1) * padding > shard_size:
-            new_T_A = calculate_valid_T_A(shard_size, T_A, ndev)
-        if new_T_A==0:
-            print(N, new_T_A)
+    N = 24 # - 2**12
+    print(N)
+    NRHS = 1
+    T_A = 6
+    fig, axs = plot_block_to_cyclic(N=N, T_A=T_A, ndev=4, N_rows=6)
+    fig.savefig("mat.pdf")
+    plt.show()
+    exit()
+    dtype = jnp.float64
 
-    # N = 4
-    # T_A = 36
-    # for i in range(10):
-    #     print(N, T_A)
-    #     N+=i*4
+    chunk_size = N // ndev
+    mesh = jax.make_mesh((ndev,), ("x",), )
 
-    #     A = jnp.diag(jnp.arange(N) + 1).astype(jnp.float64)
-    #     mesh = jax.make_mesh((ndev,), ("x",))
-    #     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-    #     # for i, shard in enumerate(A.addressable_shards):
-    #     #     print(f"Shard A {i} on device {shard.device}:")
-    #     #     print(shard.data)
-    #     # print("A_bc:\n", A)
-    #     A_bc = block_cyclic_relayout(A, T_A)
-    #     # for i, shard in enumerate(A_bc.addressable_shards):
-    #     #     print(f"Shard A {i} on device {shard.device}:")
-    #     #     print(shard.data)
-    #     # print("A_bc:\n", A_bc)
-    #     # visualize_sharded_matrix(A_bc, T_A)
-    #     A_bc_manual = manual_block_cyclic_layout(A, T_A, ndev)
-
-    #     # for row_i, row_j in zip(A_bc, A_bc_manual):
-    #         # print(row_i[:24].astype(int))
-    #         # print(row_j[:24].astype(int))
-    #         # if not jnp.allclose(row_i[: len(row_j)], row_j):
-    #         #     print(row_i)
-    #         #     print(row_j)
-    #         #     print("DIFF")
-    #         #     shard_size = N // ndev
-    #         #     target = T_A * ndev
-    #         #     padding = (target - ((shard_size) % target)) % target
-    #         #     print(shard_size)
-    #         #     print(target)
-    #         #     print(ndev * padding)
-    #             # out = "\n".join(
-    #             #     " ".join(f"{val:02d}" for val in row) for row in A_bc.astype(int)
-    #             # )
-    #             # print(out)
-
-    #             # exit()
-    #     assert jnp.allclose(A_bc, A_bc_manual)
+    _A = jnp.diag(jnp.arange(1, N+1, dtype=dtype))
+    print(_A)
+    # _A = manual_cyclic_1d_layout(_A, T_A=T_A, ndev=ndev)
+    _A_bc = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
+    _A_bc = cyclic_1d_layout(_A_bc, T_A)
+    print(_A_bc)
+    _A_bc = undo_cyclic_1d_layout(_A_bc, T_A=T_A)
+    print(_A_bc)
+    for shard in jax.device_put(_A_bc, NamedSharding(mesh, P(None, "x"))).addressable_shards:
+        print(shard)
+    
+    assert jnp.allclose(_A_bc, _A)

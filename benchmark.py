@@ -34,36 +34,49 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potri
+from src.jaxmg.potrf import potrf
 
 devices = jax.devices("gpu")
 
 
-def random_psd(n, dtype, seed):
-    """
-    Generate a random n x n positive semidefinite matrix.
-    """
-    key = jax.random.key(seed)
-    A = jax.random.normal(key, (n, n), dtype=dtype)
-    return A @ A.T  # symmetric PSD
-
-
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**3  # - 2**12
+    N = 2**4  # - 2**12
     print(N)
     NRHS = 1
     T_A = 2
-    dtype = jnp.float64
+    dtype = jnp.float32
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     ndev = len(devices)
     chunk_size = N // ndev
-    mesh = jax.make_mesh((ndev,), ("x",), )
+    mesh = jax.make_mesh((ndev,), ("x",))
+    if ndev > 1:
+        @jax.jit
+        @partial(jax.shard_map, mesh=mesh, in_specs=(), out_specs=P(None, "x"))
+        def make_diag():
+            idx = jax.lax.axis_index("x")  # device index
+            col_start = idx * chunk_size  # global column offset
+            # Allocate zeros of shape (N, chunk_size)
+            local = jnp.zeros((N, chunk_size), dtype=dtype)
+            # Global column indices handled by this shard
+            cols = jax.lax.iota(jnp.int32, chunk_size) + col_start
+            # Rows = same as global cols (diagonal)
+            rows = cols
+            # Values for the diagonal
+            vals = cols + 1  # because your diag entries are 1..N
+            # Scatter into local slice (adjust columns relative to col_start)
+            local = local.at[(rows, cols - col_start)].set(vals)
+            return local
 
-    # _A = random_psd(N, dtype, seed=0)
-    _A = jnp.diag(jnp.arange(1, N+1, dtype=dtype))
-    A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
+        A = make_diag()
+    else:
+        _A = jnp.diag(np.arange(N, dtype=dtype)+1)
+        A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
+
+    # _b = jnp.ones((N, NRHS), dtype=dtype)
+    # _b = jnp.concat([jnp.ones((N//2, NRHS), dtype=dtype), jnp.zeros((N//2, NRHS), dtype=dtype)], axis=0)
+    b = jax.device_put(_b, NamedSharding(mesh, P(None, None)))
 
     print("Mat put on device")
     # time.sleep(5)
@@ -75,16 +88,12 @@ def main():
     #     print(shard.data)
     # Reconstruct from getrf
     start = time.time()
-    print(A)
-    print(jnp.linalg.inv(A))
-    with jnp.printoptions(linewidth=500):
-        print(A.shape)
-        out, status = potri(A, T_A=T_A, return_status=True)
-        print(out.shape)
-        print(status)
-        out.block_until_ready()
-        print(out)
-        print(A @ out)
+    b_before = b.copy()
+    out = potrf(A, b, T_A=T_A)
+    out.block_until_ready()
+    print(out)
+    print(f"Done, elapsed time { time.time() - start} [s]")
+    assert jnp.allclose(b_before.flatten(), (A@out).flatten())
 
 
 if __name__ == "__main__":
