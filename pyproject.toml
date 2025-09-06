@@ -14,4 +14,4 @@ requires-python = ">=3.9"
 where = ["src"]
 
 [tool.setuptools.package-data]
-jaxmg = ["bin/libpotrf.so"]
+jaxmg = ["bin/libpotrf.so", "bin/libpotri.so"]

@@ -1,8 +1,8 @@
-# Distributed Linear Solver with CusolveMg and Jax
+# Distributed Linear Solver with cusolverMg and Jax
 
 This code provides a C++ interface between jax and cusolverMg, a distributed linear solver
 provided by NVIDIA. Calling the distributed solver requires laying out matrices in
-1D block cyclic form, which we handle on the Jax side with a single all-to-all call in
+1D block cyclic, column major form, which we handle on the Jax side with a single all-to-all call in
 combination with `jax.shard_map`. 
 
 The provided binary is compiled with `gcc==11.5.0`, `cuda==12.8.0` and `cudnn=9.2.0.82-12`.
