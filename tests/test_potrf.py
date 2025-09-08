@@ -29,10 +29,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        # Reconstruct from getrf
         out = potrf(A, b, T_A=T_A)
         expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
-        assert jnp.allclose(out.flatten(), expected_out, rtol=jnp.finfo(dtype).eps)
+        assert jnp.allclose(out.flatten(), expected_out)
 
     def cusolver_solve_psd(N, T_A, dtype):
         A = random_psd(N, dtype=dtype, seed=1234)
@@ -45,12 +44,10 @@ if any("gpu" == d.platform for d in jax.devices()):
         _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        # Reconstruct from getrf
         out = potrf(_A, _b, T_A=T_A)
         norm_scipy = jnp.linalg.norm(b - A @ expected_out)
         norm_potrf = jnp.linalg.norm(b - A @ out)
         assert jnp.isclose(norm_scipy, norm_potrf)
-       
 
     devices = jax.devices()
     ndev = len(devices)
@@ -62,13 +59,13 @@ if any("gpu" == d.platform for d in jax.devices()):
         @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (4, 8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A, dtype):
+        def test_cusolver_solve_arange_dev_1(N, T_A, dtype):
             cusolver_solve_arange(N, T_A, dtype)
 
         @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (4, 8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A, dtype):
+        def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
             cusolver_solve_psd(N, T_A, dtype)
 
     elif ndev == 2:
@@ -76,20 +73,32 @@ if any("gpu" == d.platform for d in jax.devices()):
         @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A, dtype):
+        def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
             cusolver_solve_arange(N, T_A, dtype)
-        
+
         @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
         @pytest.mark.parametrize("T_A", (1, 2, 3))
         @pytest.mark.parametrize("N", (8, 10, 12))
-        def test_cusolver_solve_dev_1(N, T_A, dtype):
+        def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+            cusolver_solve_psd(N, T_A, dtype)
+
+    elif ndev == 4:
+
+        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
+        @pytest.mark.parametrize("T_A", (1, 2, 4))
+        @pytest.mark.parametrize("N", (48, 60))
+        def test_cusolver_solve_arange_dev_4(N, T_A, dtype):
+            cusolver_solve_arange(N, T_A, dtype)
+
+        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
+        @pytest.mark.parametrize("T_A", (1, 2, 4))
+        @pytest.mark.parametrize("N", (48, 60))
+        def test_cusolver_solve_psd_dev_4(N, T_A, dtype):
             cusolver_solve_psd(N, T_A, dtype)
 
     else:
-        print("Test only works for 1 and 2 GPUs")
+        print("Test only works for 1,2 and 4 GPUs")
         assert True
-
-
 else:
 
     def test_skip_gpu():
