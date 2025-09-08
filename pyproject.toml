@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "jaxmg"
 version = "0.1.0"
-description = "Python wrapper around cusolverMg with JAX support"
+description = "Python wrapper around cuSolverMg with JAX support"
 authors = [{name="Roeland Wiersema"}]
 dependencies = ["jax[cuda12]>=0.6.0,<=0.7.1",
  "pytest==8.2.1",

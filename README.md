@@ -38,7 +38,7 @@ Multi-GPU tests: Requires multiple available GPUs.
 
 Consider the case where we have 2 GPUs available and we are trying to solve the linear 
 system $A\cdot x =b$, where $A$ is an $12\times12$, positive-definite matrix and $b$ corresponds to a vector of ones. Every shard on each GPU will be of size $12\times 6$.
-We require a cyclic 1D tiling with tile size `T_A=2` for `cusolverMg` to work. This 
+We require a cyclic 1D tiling with tile size `T_A=2` for `cuSolverMg` to work. This 
 results in the following layout:
 
 <img src="resources/mat_example.png" alt="Matrix layout illustration" width="800">
@@ -47,7 +47,10 @@ In order to interweave the blocks, we need to ensure that each shard is a multip
 `ndev * T_A = 4`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all_to_all`. We therefore add zero padding of 2 columns to each shard (see top figure). After interweaving the blocks, we are left with extra padding on the right, which we ignore in the solver itself. After the solver is called, we again use a
 single `jax.lax.all_to_all` call to remap the data back to block-sharded form. 
 
+As we see in the code below, the interface is simple to use and does not require the user to deal with the cyclic 1d data remapping:
+
 ```python
+# examples/readme.py
 import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
@@ -56,6 +59,7 @@ from jaxmg import potrf
 
 # Assumes we have at least one GPU available
 devices = jax.devices("gpu")
+assert len(devices) in [1, 2], "Example only works for 1 or 2 devices"
 N = 12
 T_A = 2
 dtype = jnp.float64
