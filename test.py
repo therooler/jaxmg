@@ -74,7 +74,9 @@ def main():
     print("Mat put on device")
 
     with jnp.printoptions(linewidth=500):
-        eigenvalues,  status = syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False)
+        print(syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False))
+        eigenvalues, status = syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False)
+        print(eigenvalues)
         # print("V")
         # print(V)
         # eigenvalus_VtAV = jnp.diag(V.T @ _A @ V)

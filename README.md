@@ -24,6 +24,9 @@ To verify the package (requires one or more available GPUs), run the pytest comm
 pytest 
 ```
 
+While we can check the block cylic remapping by faking multiple CPU devices, we can only check the multi-GPU code when
+there are multiple GPUs available. 
+
 ## Development
 
 If you want to compile from source for development reasons, then from the source root use:
