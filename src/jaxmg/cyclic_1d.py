@@ -395,7 +395,7 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
 
     # Grid lines for device boundaries in the block layout
     for d in range(1, ndev):
-        axs[0].axvline(d * shard_size + pad - 0.5, lw=1.2, ls='--', color='k', alpha=0.8)
+        axs[0].axvline(d * (shard_size + pad) - 0.5, lw=1.2, ls='--', color='k', alpha=0.8)
 
     # ---- Shared x-axis ticks every T_A ----
     max_cols = max(total_cols, total_cols_padded)
