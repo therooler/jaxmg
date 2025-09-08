@@ -400,13 +400,24 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     # ---- Shared x-axis ticks every T_A ----
     max_cols = max(total_cols, total_cols_padded)
     xticks = np.arange(0, max_cols + 1, T_A)
+    nticks = max_cols + 1
+    renderer = fig.canvas.get_renderer()
+    bbox = axs[0].get_window_extent(renderer=renderer)
+    x_axis_len = bbox.width
+    nticks = int(np.ceil(max_cols/T_A))
+    # rough available space per tick
+    space_per_tick = x_axis_len / nticks
+    # heuristic: scale fontsize to ~70% of available space
+    size = max(5, min(int(space_per_tick / 2), 12))
     for ax in axs:
         ax.set_xticks(xticks -0.5)
-        ax.set_xticklabels(xticks, fontsize=8)
+        ax.set_xticklabels(xticks, fontsize=size)
+        ax.set_yticks([])
 
     im1 = axs[1].imshow(after, aspect='auto', interpolation='nearest', cmap=cmap, norm=norm)
     axs[1].set_title(f"1D block-cyclic (tile size = {T_A})")
-    axs[1].set_xlabel("Columns")
+    axs[1].set_xlabel(r"Columns")
+    axs[1].set_ylabel(r"Rows")
 
     # Grid lines for tile boundaries
     for t in range(1, n_tiles):
