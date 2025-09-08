@@ -1,7 +1,20 @@
+import jax
+import jax.numpy as jnp
 from jax.sharding import NamedSharding
+from jax import Array
 
-def get_mesh_and_spec_from_array(A):
-    sharding = A.sharding
+
+def random_psd(n, dtype, seed):
+    """
+    Generate a random n x n positive semidefinite matrix.
+    """
+    key = jax.random.key(seed)
+    A = jax.random.normal(key, (n, n), dtype=dtype) / jnp.sqrt(n)
+    return A @ A.T + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
+
+
+def get_mesh_and_spec_from_array(a: Array):
+    sharding = a.sharding
     if isinstance(sharding, NamedSharding):
         return sharding.mesh, sharding.spec
     else:
@@ -9,12 +22,6 @@ def get_mesh_and_spec_from_array(A):
             "Array is not sharded with a NamedSharding, cannot extract mesh and spec."
         )
 
-
-def check_matrix_validity(matrix_size, num_devices):
-    if matrix_size % num_devices != 0:
-        raise ValueError(
-            f"Matrix of size N x N must be have N divisible by number of devices {num_devices}, receieved N = {matrix_size}."
-        )
 
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""
