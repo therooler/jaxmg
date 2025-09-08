@@ -127,3 +127,5 @@ install(TARGETS potrf
 install(TARGETS potri
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
+
+# cmake --build . --target potri && cmake --install .
