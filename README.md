@@ -4,7 +4,7 @@ This repository provides a C++ interface between [JAX](https://github.com/google
 
 To use cuSolverMg, matrices must be stored in **1D block-cyclic, column-major form**. This package handles that transformation on the JAX side with a single **all-to-all** call in combination with `jax.shard_map`.
 
-<img src="mat.png" alt="Matrix layout illustration" width="800">
+<img src="resources/mat.png" alt="Matrix layout illustration" width="800">
 
 The provided binary is compiled with:
 - **GCC**: 11.5.0  
@@ -30,7 +30,7 @@ system $A\cdot x =b$, where $A$ is an $12\times12$, positive-definite matrix and
 We require a cyclic 1D tiling with tile size `T_A=2` for `cusolverMg` to work. This 
 results in the following layout:
 
-<img src="mat_example.png" alt="Matrix layout illustration" width="800">
+<img src="resources/mat_example.png" alt="Matrix layout illustration" width="800">
 
 In order to interweave the blocks, we need to ensure that each shard is a multiple of
 `ndev * T_A = 4`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all-to-all`. As a result, we add zero padding of 2 columns to each shard.
