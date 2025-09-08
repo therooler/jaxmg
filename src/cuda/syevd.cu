@@ -94,10 +94,12 @@ namespace jax
         break;                            \
     }
         template <typename data_type>
-        ffi::Error PotrfMgImpl(int64_t N, int64_t NRHS, int64_t batch_a,
+        ffi::Error SyevdMgImpl(int64_t N, int64_t batch_a,
                                gpuStream_t stream, ffi::ScratchAllocator &scratch,
-                               ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
-                               ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
+                               ffi::AnyBuffer a, int64_t tile_size,
+                               ffi::Result<ffi::AnyBuffer> eigenvalues,
+                               ffi::Result<ffi::AnyBuffer> V,
+                               ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
             bool VERBOSE = false;                 // print matrices for debugging
@@ -118,8 +120,9 @@ namespace jax
 
             /* data */
             auto array_data_A = static_cast<data_type *>(a.untyped_data()); // XLA device pointer for a
-            auto array_data_b = static_cast<data_type *>(b.untyped_data());
-            auto out_data = static_cast<data_type *>(out->untyped_data());
+            auto array_data_eigenvalues = static_cast<data_type *>(eigenvalues->untyped_data());
+            auto array_data_V = static_cast<data_type *>(V->untyped_data());
+            std::vector<data_type> eigenvalues_host(N, 0);
 
             /* Tiling sizes */
             const int IA = 1; // index within a global matrix, base-1 (not used)
@@ -127,34 +130,19 @@ namespace jax
             const int T_A = std::min(tile_size, batch_a); // tile size of A
             const int lda = N;                            // leading dimension of local A
 
-            const int IB = 1; // index within a global matrix, base-1 (not used)
-            const int JB = 1;
-
-            if (NRHS > 256)
-            {
-                return ffi::Error::InvalidArgument(
-                    absl::StrFormat("%s: Number of right hand sides must be <=256, received %d, "
-                                    "this may be improved in the next release",
-                                    source, NRHS));
-            }
-            const int T_B = static_cast<int>(NRHS); // tile size of B
-            const int ldb = N;                      // leading dimension of local b
-
             /* CUDA */
-            cudaDataType compute_type = traits<data_type>::cuda_data_type; // Data type for computation
-            cudaLibMgMatrixDesc_t descrA; // CusolverMg matrix descriptors
-            cudaLibMgMatrixDesc_t descrB;
-            cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
-            cudaLibMgGrid_t gridB;
+            cudaDataType compute_type = traits<data_type>::cuda_data_type;              // Data type for computation
+            cudaLibMgMatrixDesc_t descrA;                                               // CusolverMg matrix descriptors
+            cudaLibMgGrid_t gridA;                                                      // CusolverMg grid descriptors
             cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
+            cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR;                          // Wether to return both eigenvectors and eigenvalues
             FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
-            int info = 0;                            // Info used by cusolverMg calls
-            cusolverStatus_t cusolver_status;        // Return status of cusolverMg calls
+            int info = 0;                     // Info used by cusolverMg calls
+            cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
             int cusolver_status_host;
-            auto status_data = status->typed_data(); // Status returned by potrf
-            int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
-            int64_t lwork_potrs = 0;
+            auto status_data = status->typed_data(); // Status returned by syevd
+            int64_t lwork_syevd = 0;                 // Workspace size used by cusolverMg calls
 
             /* Shared memory */
             static std::once_flag barrier_initialized; // Initialize barrier once between threads
@@ -162,12 +150,10 @@ namespace jax
                            { sync_point.initialize(nbGpus); });
             sync_point.arrive_and_wait();
             sharedMemoryInfo shminfoA; // Shared memory info for device pointers to local matrices
-            sharedMemoryInfo shminfoB;
             sharedMemoryInfo shminfowork;
             sharedMemoryInfo shminfolwork; // Shared memory info for lwork space nbytes
 
             data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoA, "shmA"); // Actual shared memory
-            data_type **shmB = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoB, "shmB");
             data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
             int64_t *shmlwork = (int64_t *)get_shm_lwork_ptr(currentDevice, sync_point, shminfolwork, "shmlwork");
 
@@ -186,7 +172,6 @@ namespace jax
                         std::printf("\tThere are %d GPUs \n", nbGpus);
                         std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
                         std::printf("T_A: %d \n", T_A);
-                        std::printf("T_B: %d \n", T_B);
                     }
                 }
 
@@ -198,7 +183,6 @@ namespace jax
                 // std::printf("Step 3: Create matrix descriptors for A and D \n");
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridA, 1, nbGpus, deviceList.data(), mapping));
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridB, 1, nbGpus, deviceList.data(), mapping));
 
                 /* (global) A is N-by-N */
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrA, N, /* number of rows of (global) A */
@@ -206,13 +190,6 @@ namespace jax
                                                                     N,          /* number or rows in a tile */
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
-
-                /* (global) B is N-by-NRHS */
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrB, N, /* number of rows of (global) B */
-                                                                    NRHS,       /* number of columns of (global) B */
-                                                                    N,          /* number or rows in a tile */
-                                                                    T_B,        /* number of columns in a tile */
-                                                                    compute_type, gridB));
             }
             if (VERBOSE)
             {
@@ -224,36 +201,10 @@ namespace jax
                     std::cout << A[i] << std::endl;
                 }
 
-                std::vector<data_type> B(batch_a * NRHS, 0);
-                gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
-
                 std::printf("%d: A = matlab base-1\n", currentDevice);
-
                 print_matrix(N, batch_a, A.data(), N);
-                std::printf("%d: b = matlab base-1\n", currentDevice);
-                print_matrix(NRHS, batch_a, B.data(), NRHS);
             }
-            // std::printf("Step 4: Allocate distributed matrices A and B \n");
 
-            // int64_t nbytes_A = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_A, lda);
-            // int64_t nbytes_B = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_B, ldb);
-
-            /* A := 0 */
-
-            // FFI_ASSIGN_OR_RETURN(auto workspaceA, AllocateWorkspaceBytes<data_type>(scratch, nbytes_A, "workspaceA"));
-            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            // shmA[currentDevice] = workspaceA;
-            /* B := 0 */
-            // FFI_ASSIGN_OR_RETURN(auto workspaceB, AllocateWorkspaceBytes<data_type>(scratch, nbytes_B, "workspaceB"));
-            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            // shmB[currentDevice] = workspaceB;
-            // CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            // sync_point.arrive_and_wait();
-            /*
-            The example has the NxN matrix in host memory and then distributes it in chunks over the GPUs
-            We have chunks of size NxBatch in device memory, and need to somehow move this to the expected layout
-            for PotRf.
-            */
             // std::printf("Step 8: Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
                                          /* input */
@@ -265,20 +216,6 @@ namespace jax
                                          array_data_A /* device pointer for shard on device */
             );
             shmA[currentDevice] = array_data_A;
-            if (currentDevice == 0)
-            {
-                // std::cout << "memcpyH2D b" << std::endl;
-                memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, NRHS,
-                                             /* input */
-                                             array_data_b, ldb,
-                                             /* output */
-                                             1,           /* number of columns of global A */
-                                             T_B,         /* number of columns per column tile */
-                                             ldb,         /* leading dimension of local A */
-                                             array_data_b /* device pointer for shard on device */
-                );
-                shmB[currentDevice] = array_data_b;
-            }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
@@ -286,26 +223,19 @@ namespace jax
             // std::printf("Step 9: Allocate workspace \n");
             if (currentDevice == 0)
             {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
-                                                                    //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
-                                                                    reinterpret_cast<void **>(shmA), IA, /* base-1 */
-                                                                    JA,                                  /* base-1 */
-                                                                    descrA, compute_type, &lwork_potrf));
+                CUSOLVER_CHECK_OR_RETURN(cusolverMgSyevd_bufferSize(cusolverH, jobz, CUBLAS_FILL_MODE_LOWER, N,
+                                                                    reinterpret_cast<void **>(shmA), IA, JA, descrA,
+                                                                    reinterpret_cast<void *>(eigenvalues_host.data()),
+                                                                    compute_type, compute_type,
+                                                                    &lwork_syevd));
 
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrs_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
-                                                                                                                //   reinterpret_cast<void **>(array_d_A.data()), IA, JA,
-                                                                    reinterpret_cast<void **>(shmA), IA, JA,
-                                                                    //   descrA, reinterpret_cast<void **>(array_d_B.data()),
-                                                                    descrA, reinterpret_cast<void **>(shmB),
-                                                                    IB, JB, descrB, compute_type,
-                                                                    &lwork_potrs));
-                *shmlwork = std::max(lwork_potrf, lwork_potrs);
+                *shmlwork = lwork_syevd;
             }
             sync_point.arrive_and_wait();
             // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
-            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (*shmlwork), "workspace_potrf"));
+            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (*shmlwork), "workspace_syevd"));
             shmwork[currentDevice] = workspace;
 
             /* sync all devices */
@@ -314,11 +244,11 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                // std::printf("Step 10: Solve A*X = B by POTRF and POTRS \n");
-                cusolver_status = cusolverMgPotrf(
-                    cusolverH, CUBLAS_FILL_MODE_LOWER, N,
+                cusolver_status = cusolverMgSyevd(
+                    cusolverH, jobz, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
-                    descrA, compute_type,
+                    descrA, reinterpret_cast<void **>(eigenvalues_host.data()),
+                    compute_type, compute_type,
                     reinterpret_cast<void **>(shmwork), *shmlwork, &info);
 
                 if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
@@ -335,56 +265,32 @@ namespace jax
                 if (0 > info)
                 {
                     return ffi::Error::Internal(
-                        absl::StrFormat("unexpected error in cusolverMgPotrf, %d-th input parameter is wrong \n", -info));
-                }
-
-                cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
-                                                  reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                  reinterpret_cast<void **>(shmB), IB, JB, descrB,
-                                                  compute_type,
-                                                  reinterpret_cast<void **>(shmwork), *shmlwork,
-                                                  &info);
-
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = -static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
-                /* sync all devices */
-                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-
-                /* check if parameters are valid */
-                if (0 > info)
-                {
-                    return ffi::Error::Internal(
-                        absl::StrFormat("unexpected error in cusolverMgPotrs, %d-th input parameter is wrong \n", -info));
+                        absl::StrFormat("unexpected error in cusolverMgSyevd, %d-th input parameter is wrong \n", -info));
                 }
             }
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Step 11: Solution vector B \n");
-
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                out_data, shmB[0], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+                array_data_eigenvalues, eigenvalues_host.data(), sizeof(data_type) * N, gpuMemcpyHostToDevice, stream));
+            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    array_data_V, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
 
             if (currentDevice == 0)
             {
                 // std::printf("Step 12: Free resources \n");
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrA));
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrB));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridA));
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridB));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
                 if (currentDevice == 0)
                 {
                     sharedMemoryClose(&shminfoA);
-                    sharedMemoryClose(&shminfoB);
                     sharedMemoryClose(&shminfowork);
                     sharedMemoryClose(&shminfolwork);
                     // std::printf("%d: Shared memory destroyed\n", currentDevice);
@@ -396,42 +302,41 @@ namespace jax
             return ffi::Error::Success();
         }
 
-        ffi::Error PotrfMgDispatch(gpuStream_t stream, ffi::ScratchAllocator scratch,
-                                   ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
-                                   ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
+        ffi::Error SyevdMgDispatch(gpuStream_t stream, ffi::ScratchAllocator scratch,
+                                   ffi::AnyBuffer a, int64_t tile_size,
+                                   ffi::Result<ffi::AnyBuffer> eigenvalues,
+                                   ffi::Result<ffi::AnyBuffer> V,
+                                   ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             auto dataType = a.element_type();
 
             // Columns are batched
             FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
-            FFI_ASSIGN_OR_RETURN((const auto [N_b, NRHS]), SplitBatch1D(b.dimensions()));
-            FFI_RETURN_IF_ERROR(CheckShape(b.dimensions(), {N, NRHS}, "b", "potrf"));
 
-            if (dataType != out->element_type())
+            if ((dataType != V->element_type()) || (dataType != eigenvalues->element_type()))
             {
                 return ffi::Error::InvalidArgument(
                     "The input and output to getrf must have the same element type");
             }
-            FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "potrf"));
+            FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "syevd"));
 
-            SOLVER_DISPATCH_IMPL(PotrfMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out, status);
+            SOLVER_DISPATCH_IMPL(SyevdMgImpl, N, batch_a, stream, scratch, a, tile_size, eigenvalues, V, status);
 
             return ffi::Error::InvalidArgument(absl::StrFormat(
-                "Unsupported data type%s for potrf", absl::FormatStreamed(dataType)));
+                "Unsupported data type%s for syevd", absl::FormatStreamed(dataType)));
         }
 
-        XLA_FFI_DEFINE_HANDLER_SYMBOL(PotrfMgFFI, PotrfMgDispatch,
+        XLA_FFI_DEFINE_HANDLER_SYMBOL(SyevdMgFFI, SyevdMgDispatch,
                                       ffi::Ffi::Bind()
                                           .Ctx<ffi::PlatformStream<gpuStream_t>>()
                                           .Ctx<ffi::ScratchAllocator>()
                                           .Arg<ffi::AnyBuffer>()        // A
-                                          .Arg<ffi::AnyBuffer>()        // b
                                           .Attr<int64_t>("T_A")         // tile size
-                                          .Ret<ffi::AnyBuffer>()        // x
+                                          .Ret<ffi::AnyBuffer>()        // eigenvalues
+                                          .Ret<ffi::AnyBuffer>()        // V
                                           .Ret<ffi::Buffer<ffi::S32>>() // status
         );
 
 #undef SOLVER_DISPATCH_IMPL
-
     } // namespace JAX_GPU_NAMESPACE
 } // namespace jax
