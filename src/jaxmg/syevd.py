@@ -97,18 +97,18 @@ def syevd(
     def impl(target_name):
         if target_name == "syevd_mg":
             out_type = (
-                jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
                 jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
+                jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
                 jax.ShapeDtypeStruct((1,), jnp.int32),
             )
-            out_specs = (spec_a, P(spec_a._partitions[1]), P(spec_a._partitions[1]))
-            output_layouts= ((1, 0), (0,), (0,))
+            out_specs = (P(), spec_a, P(spec_a._partitions[1]))
+            output_layouts= ((0,), (1, 0), (0,))
         elif target_name == "syevd_no_V_mg":
             out_type = (
                 jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
                 jax.ShapeDtypeStruct((1,), jnp.int32),
             )
-            out_specs = (P(spec_a._partitions[1]), P(spec_a._partitions[1]))
+            out_specs = (P(), P(spec_a._partitions[1]))
             output_layouts= ((0,), (0,))
         else:
             raise NotImplementedError()
@@ -138,13 +138,15 @@ def syevd(
         eigenvalues, V, status = jax.lax.platform_dependent(a, cuda=impl("syevd_mg"))
         if not cyclic_1d and len(mesh_a.devices) > 1:
             V = undo_cyclic_1d_layout(V, T_A)
-        out = (eigenvalues, V)
+        if return_status:
+            out = (eigenvalues, V, status)
+        else:
+            out = (eigenvalues, V)
     else:
         eigenvalues, status = jax.lax.platform_dependent(a, cuda=impl("syevd_no_V_mg"))
-        out = (eigenvalues, )
+        if return_status:
+            out = (eigenvalues, status)
+        else:
+            out = eigenvalues
     
-
-    if return_status:
-        return *out, status[0]
-    else:
-        return out
+    return out

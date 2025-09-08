@@ -91,13 +91,13 @@ def potri(
         )
 
         def fn(_a):
-            out, status = jax.ffi.ffi_call(
+            out = jax.ffi.ffi_call(
                 target_name,
                 out_type,
                 input_layouts=((1, 0),),
                 output_layouts=((1, 0), (0,)),
             )(_a, T_A=int(T_A))
-            return out, status
+            return out
 
         return jax.jit(
             lambda _a: jax.shard_map(

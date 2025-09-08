@@ -117,9 +117,7 @@ def potrf(
         )
 
     if not cyclic_1d and len(mesh_a.devices) > 1:
-        print("Starting cyclic 1d")
         a = cyclic_1d_layout(a, T_A=T_A)
-        print("Done with cyclic 1d")
     out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))
     if return_status:
         return out, status[0]
