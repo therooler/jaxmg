@@ -126,12 +126,12 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
 
 
 if __name__ == "__main__":
-    N = 24 # - 2**12
+    N = 100 # - 2**12
     print(N)
     NRHS = 1
-    T_A = 6
+    T_A = 4
     fig, axs = plot_block_to_cyclic(N=N, T_A=T_A, ndev=4, N_rows=6)
-    fig.savefig("mat.pdf")
+    fig.savefig("mat.png")
     plt.show()
     exit()
     dtype = jnp.float64

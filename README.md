@@ -5,6 +5,8 @@ provided by NVIDIA. Calling the distributed solver requires laying out matrices 
 1D block cyclic, column major form, which we handle on the Jax side with a single all-to-all call in
 combination with `jax.shard_map`. 
 
+<embed src="mat.png" width="600">
+
 The provided binary is compiled with `gcc==11.5.0`, `cuda==12.8.0` and `cudnn=9.2.0.82-12`.
 
 Note that jax comes shipped with CUDA 12.x these days, and so I rely on the shipped binaries
