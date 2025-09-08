@@ -81,6 +81,9 @@ which should print
 True
 ```
 
+> **Note:** When multiple GPUs are available, we initialize the device communcation when `jaxmg` is imported, which can take a couple of seconds.
+
+
 ## Current limitations
 
 The current version of `jaxmg` has the following limitations:
