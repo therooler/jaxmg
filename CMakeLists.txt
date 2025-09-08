@@ -173,6 +173,10 @@ install(TARGETS syevd_no_V
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
 
+# module load gcc/11.5.0 cudnn/9.2.0.82-12 cuda/12.8.0
+# cmake ..
+# cmake --build . --target install
+# OR
 # cmake --build . --target potrs && cmake --install .
 # cmake --build . --target potri && cmake --install .
 # cmake --build . --target syevd && cmake --install .

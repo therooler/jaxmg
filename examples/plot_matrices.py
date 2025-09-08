@@ -10,10 +10,10 @@ if __name__ == "__main__":
         NRHS = 1
         T_A = 4
         fig, axs = plot_block_to_cyclic(N=N, T_A=T_A, ndev=4, N_rows=6)
-        fig.savefig("resources/mat.png", dpi=300)
+        fig.savefig("../resources/mat.png", dpi=300)
 
         N = 12  # - 2**12
         NRHS = 1
         T_A = 2
         fig, axs = plot_block_to_cyclic(N=N, T_A=T_A, ndev=2, N_rows=6)
-        fig.savefig("resources/mat_example.png", dpi=300)
+        fig.savefig("../resources/mat_example.png", dpi=300)

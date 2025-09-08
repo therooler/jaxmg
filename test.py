@@ -19,6 +19,8 @@ and packaging of the extension are useful for testing.
 
 import os
 
+from mg_multi.src.jaxmg import potrs
+
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 import ctypes
@@ -34,7 +36,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potri, potrf, syevd
+from src.jaxmg import potri, syevd
 
 devices = jax.devices("gpu")
 
@@ -121,7 +123,7 @@ def main2():
     # Reconstruct from getrf
     start = time.time()
     b_before = b.copy()
-    out = potrf(A, b, T_A=T_A)
+    out = potrs(A, b, T_A=T_A)
     out.block_until_ready()
     print(out)
     print(expected_out)

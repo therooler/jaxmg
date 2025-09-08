@@ -113,11 +113,12 @@ def potrs(
                 in_specs=(spec_a, spec_b),
                 out_specs=(spec_b, P(spec_a._partitions[1])),
                 check_vma=False,
-            )(_a, _b),
+            )(_a, _b), donate_argnums=(0,)
         )
 
     if not cyclic_1d and len(mesh_a.devices) > 1:
         a = cyclic_1d_layout(a, T_A=T_A)
+        print("Done with cyclic")
     out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrs_mg"))
     if return_status:
         return out, status[0]
