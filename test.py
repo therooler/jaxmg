@@ -34,7 +34,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potri, potrf, undo_cyclic_1d_layout
+from src.jaxmg import potri, potrf, syevd
 
 devices = jax.devices("gpu")
 
@@ -45,12 +45,12 @@ def random_psd(n, dtype, seed):
     """
     key = jax.random.key(seed)
     A = jax.random.normal(key, (n, n), dtype=dtype) / jnp.sqrt(n)
-    return A @ A.T  + jnp.eye(n, dtype=dtype)*1e-3# symmetric PSD
+    return A @ A.T + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
 
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**3  # - 2**12
+    N = 2**4  # - 2**12
     print(N)
     NRHS = 1
     T_A = 2
@@ -65,33 +65,23 @@ def main():
     )
 
     _A = random_psd(N, dtype, seed=0)
-    # _A = jnp.diag(jnp.arange(1, N+1, dtype=dtype))
+    # _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
+    eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
+    print(V_expected)
+    print(eigenvalues_expected)
     A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
 
     print("Mat put on device")
-    # time.sleep(5)
-    # for i, shard in enumerate(A.addressable_shards):
-    #     print(f"Shard A {i} on device {shard.device}:")
-    #     print(shard.data)
-    # for i, shard in enumerate(b.addressable_shards):
-    #     print(f"Shard b {i} on device {shard.device}:")
-    #     print(shard.data)
-    # Reconstruct from getrf
-    start = time.time()
-    print(A)
-    print(jnp.linalg.inv(A))
+
     with jnp.printoptions(linewidth=500):
-        print(A.shape)
-        out, status = potri(A, T_A=T_A, return_status=True)
-        print(out.shape)
-        print(status)
-        # out = undo_cyclic_1d_layout(out, T_A)
-        out.block_until_ready()
-        print("OUT")
-        print(out)
-        print(A)
-        print(A @ out)
-    assert jnp.allclose(A @ out, jnp.eye(N, dtype=dtype))
+        eigenvalues,  status = syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False)
+        # print("V")
+        # print(V)
+        # eigenvalus_VtAV = jnp.diag(V.T @ _A @ V)
+        print(eigenvalues)
+        # print(eigenvalus_VtAV)
+        print(eigenvalues_expected)
+        assert jnp.allclose(eigenvalues, eigenvalues_expected)
 
 
 def main2():
@@ -143,4 +133,4 @@ def main2():
 
 
 if __name__ == "__main__":
-    main2()
+    main()
