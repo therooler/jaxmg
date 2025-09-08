@@ -1,4 +1,4 @@
-# jaxmg: A Distributed Linear Solver in JAX with cuSolverMg
+# jaxmg: A distributed linear solver in JAX with cuSolverMg
 
 This repository provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cusolvermg-api), NVIDIA’s distributed linear solver.  
 
@@ -10,8 +10,8 @@ The provided binary is compiled with:
 - **GCC**: 11.5.0  
 - **CUDA**: 12.8.0  
 - **cuDNN**: 9.2.0.82-12  
-cusolver
-> **Note:** JAX ships with CUDA 12.x binaries, which this package relies on.
+
+> **Note:** JAX ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
 
 ---
 
