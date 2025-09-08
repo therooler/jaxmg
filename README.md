@@ -32,6 +32,7 @@ pytest
 ```
 
 CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
+
 Multi-GPU tests: Requires multiple available GPUs.
 
 ## Simple example
@@ -55,7 +56,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
-from jaxmg import potrf
+from jaxmg import potrs
 
 # Assumes we have at least one GPU available
 devices = jax.devices("gpu")
@@ -71,8 +72,8 @@ ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
 A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
-# Call potrf
-out = potrf(A, b, T_A=T_A)
+# Call potrs
+out = potrs(A, b, T_A=T_A)
 expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
 print(jnp.allclose(out.flatten(), expected_out))
 ```
@@ -92,7 +93,7 @@ The current version of `jaxmg` has the following limitations:
 
 - **Potential invalid tilings:** It is possible that for a given $N\times N$ matrix the provided `T_A` does not allow one to use a single `jax.lax.all_to_all` call to bring the matrix to cyclic 1D form. In this case we raise an error, and suggest both a smaller and larger `T_A` that would enable the data remapping. This problem mostly occurs for small matrices, where the number of tiles is small and `T_A` is close to the shard size.
 
-- **Maximum tilings:** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrf` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
+- **Maximum tilings:** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrs` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
 
 - **Maximum number of GPUs:** According to the cuSolverMg documentation, the current maximum number of GPUs is 16. Going beyond this value will raise a an error from within CUDA code.
 
@@ -114,10 +115,10 @@ This installs the CUDA binaries into src/jaxmg/bin.
 
 Dependencies are managed with [CPM-CMAKE](https://github.com/cpm-cmake/CPM.cmake),
 including **abseil-cpp**, **jaxlib**, **XLA** for compilation. Compilation requires C++17 or later.
-To build specific targets only, for example potrf:
+To build specific targets only, for example potrs:
 ```bash
 cmake ..
-cmake --build . --target potrf
+cmake --build . --target potrs
 cmake --install .
 ```
 

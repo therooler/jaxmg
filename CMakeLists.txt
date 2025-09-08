@@ -11,7 +11,7 @@ endif()
 include(${CPM_DOWNLOAD_LOCATION})
 
 # Abseil requires C++17
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 CPMAddPackage(
@@ -76,8 +76,8 @@ endif()
 # Set JAX_GPU_CUDA to 1 (this is required for jaxlib to compile correctly)
 add_definitions(-DJAX_GPU_CUDA=1)
 # Add libraries
-add_library(potrf SHARED
-    src/cuda/potrf.cu
+add_library(potrs SHARED
+    src/cuda/potrs.cu
     src/cuda/jax_utils.cc
     src/cuda/shm.cc
     ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
@@ -102,13 +102,13 @@ add_library(syevd_no_V SHARED
 )
 
 # Make sure we can see "thirdparty/gpus" and jax
-target_include_directories(potrf PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
+target_include_directories(potrs PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(potri PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(syevd PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(syevd_no_V PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 
 # Set the CUDA architecture
-set_target_properties(potrf PROPERTIES
+set_target_properties(potrs PROPERTIES
     CUDA_ARCHITECTURES "all"
 )
 set_target_properties(potri PROPERTIES
@@ -122,7 +122,7 @@ set_target_properties(syevd_no_V PROPERTIES
 )
 
 # Link against CUDA libraries and absl
-target_link_libraries(potrf
+target_link_libraries(potrs
     absl::strings
     absl::status
     absl::statusor
@@ -160,7 +160,7 @@ target_link_libraries(syevd_no_V
     cuda
 )
 # Make install targets
-install(TARGETS potrf
+install(TARGETS potrs
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
 install(TARGETS potri
@@ -173,7 +173,7 @@ install(TARGETS syevd_no_V
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
 
-# cmake --build . --target potrf && cmake --install .
+# cmake --build . --target potrs && cmake --install .
 # cmake --build . --target potri && cmake --install .
 # cmake --build . --target syevd && cmake --install .
 # cmake --build . --target syevd_no_V && cmake --install .

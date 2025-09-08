@@ -12,7 +12,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
-from jaxmg import potrf
+from jaxmg import potrs
 from jaxmg.utils import random_psd
 
 
@@ -29,7 +29,7 @@ if any("gpu" == d.platform for d in jax.devices()):
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        out = potrf(A, b, T_A=T_A)
+        out = potrs(A, b, T_A=T_A)
         expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
         assert jnp.allclose(out.flatten(), expected_out)
 
@@ -44,7 +44,7 @@ if any("gpu" == d.platform for d in jax.devices()):
         _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        out = potrf(_A, _b, T_A=T_A)
+        out = potrs(_A, _b, T_A=T_A)
         norm_scipy = jnp.linalg.norm(b - A @ expected_out)
         norm_potrf = jnp.linalg.norm(b - A @ out)
         assert jnp.isclose(norm_scipy, norm_potrf)

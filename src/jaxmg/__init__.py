@@ -53,7 +53,7 @@ if any("gpu" == d.platform for d in jax.devices()):
             warmup(jnp.ones((jax.local_device_count(),)))
         )  # triggers NCCL setup
 
-from .potrf import potrf
+from .potrs import potrs
 from .potri import potri
 from .syevd import syevd
 from .cyclic_1d import (
@@ -65,7 +65,7 @@ from .cyclic_1d import (
 )
 
 __all__ = [
-    "potrf",
+    "potrs",
     "potri",
     "syevd",
     "cyclic_1d_layout",
