@@ -34,7 +34,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg.potrf import potrf
+from mg_multi.src.jaxmg.potrs import potrs
 
 devices = jax.devices("gpu")
 
@@ -74,7 +74,7 @@ def main():
         _A = jnp.diag(np.arange(N, dtype=dtype)+1)
         A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
 
-    # _b = jnp.ones((N, NRHS), dtype=dtype)
+    _b = jnp.ones((N, NRHS), dtype=dtype)
     # _b = jnp.concat([jnp.ones((N//2, NRHS), dtype=dtype), jnp.zeros((N//2, NRHS), dtype=dtype)], axis=0)
     b = jax.device_put(_b, NamedSharding(mesh, P(None, None)))
 

@@ -118,7 +118,7 @@ def potrs(
 
     if not cyclic_1d and len(mesh_a.devices) > 1:
         a = cyclic_1d_layout(a, T_A=T_A)
-    out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrf_mg"))
+    out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrs_mg"))
     if return_status:
         return out, status[0]
     else:

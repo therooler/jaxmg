@@ -2,7 +2,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
-from jaxmg import potrf
+from jaxmg import potrs
 
 # Assumes we have at least one GPU available
 devices = jax.devices("gpu")
@@ -19,6 +19,6 @@ mesh = jax.make_mesh((ndev,), ("x",))
 A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 # Call potrf
-out = potrf(A, b, T_A=T_A)
+out = potrs(A, b, T_A=T_A)
 expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
 print(jnp.allclose(out.flatten(), expected_out))
