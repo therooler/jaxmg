@@ -21,13 +21,11 @@ import os
 import ctypes
 import jax
 
-jax.config.update("jax_enable_x64", True)
-
 import jax.numpy as jnp
 from jax import Array
 from jax.sharding import PartitionSpec as P
 
-from .utils import get_mesh_and_spec_from_array, check_matrix_validity
+from .utils import get_mesh_and_spec_from_array
 from .cyclic_1d import cyclic_1d_layout
 
 # Load the shared library with the FFI target definitions
@@ -119,7 +117,6 @@ def potrf(
         )
 
     if not cyclic_1d and len(mesh_a.devices) > 1:
-        check_matrix_validity(a.shape[0], len(mesh_a.devices))
         print("Starting cyclic 1d")
         a = cyclic_1d_layout(a, T_A=T_A)
         print("Done with cyclic 1d")

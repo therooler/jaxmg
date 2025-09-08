@@ -20,6 +20,10 @@ from jaxmg import (
 )
 
 
+devices = jax.devices()
+ndev = len(devices)
+mesh = jax.make_mesh((ndev,), ("x",))
+
 def test_device_count():
     devices = jax.devices()
     print(f"[test_device_count] Found {len(devices)} JAX devices.")
@@ -39,7 +43,7 @@ def cyclic_1d_sharding(N, T_A):
             ValueError, match="Attempting 1d cylic relayout with:"
         ):
             raise (exc_info)
-        T_A_min, T_A_max = calculate_valid_T_A(N // ndev, T_A, ndev)
+        T_A_min, T_A_max = calculate_valid_T_A(N // ndev, T_A, ndev, N // ndev)
         if T_A_min>0:
             new_T_A = T_A_min
         else:
@@ -67,18 +71,13 @@ def undo_cyclic_1d_sharding(N, T_A):
             raise (exc_info)
 
 
-devices = jax.devices()
-ndev = len(devices)
-mesh = jax.make_mesh((ndev,), ("x",))
-
-
 def test_T_A_calculation():
     T_A_MAX = 128
     for N in range(ndev, 10000, ndev):
         shard_size = N // ndev
         padding = calculate_padding(shard_size, T_A_MAX, ndev)
         if (ndev - 1) * padding > shard_size:
-            new_T_A = calculate_valid_T_A(shard_size, T_A_MAX, ndev)
+            new_T_A = calculate_valid_T_A(shard_size, T_A_MAX, ndev, shard_size)
 
 
 if ndev == 1:
