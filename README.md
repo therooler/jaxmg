@@ -36,7 +36,14 @@ cmake --build . --target install
 ```
 
 which will install the CUDA binaries into `src/jaxmg/bin`. We rely on [CPM-CMAKE](https://github.com/cpm-cmake/CPM.cmake) 
-for managing the packages we rely on (abseil-cpp, jaxlib, XLA) for compilation. Compilation will require at least C++17.
+for managing the packages we rely on (abseil-cpp, jaxlib, XLA) for compilation. Compilation will require at least C++17. 
+To only target specific libraries, you can use for example
+```bash
+cmake ..
+cmake --build . --target potrf
+cmake --install .
+```
+
 
 ## Citation
 
