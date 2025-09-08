@@ -430,6 +430,6 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     legend_handles = [Patch(facecolor=colors[d], edgecolor='k', label=f"GPU {d}") for d in range(ndev)]
     legend_handles.append(Patch(facecolor=colors[-1], edgecolor='k', label="padding"))
     axs[1].legend(handles=legend_handles, loc='upper right', frameon=True)
-    fig.suptitle(f"N={N}, ndev={ndev}\n", fontsize=15)
+    fig.suptitle(f"N={N}, ndev={ndev}\n")
 
     return fig, axs

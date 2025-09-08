@@ -1,6 +1,6 @@
-# Distributed Linear Solver with cuSolverMg and JAX
+# jaxmg: A Distributed Linear Solver in JAX with cuSolverMg
 
-This repository provides a C++ interface between [JAX](https://github.com/google/jax) and **cuSolverMg**, NVIDIA’s distributed linear solver.  
+This repository provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cusolvermg-api), NVIDIA’s distributed linear solver.  
 
 To use cuSolverMg, matrices must be stored in **1D block-cyclic, column-major form**. This package handles that transformation on the JAX side with a single **all-to-all** call in combination with `jax.shard_map`.
 
@@ -10,7 +10,7 @@ The provided binary is compiled with:
 - **GCC**: 11.5.0  
 - **CUDA**: 12.8.0  
 - **cuDNN**: 9.2.0.82-12  
-
+cusolver
 > **Note:** JAX ships with CUDA 12.x binaries, which this package relies on.
 
 ---
@@ -23,6 +23,17 @@ Clone the repository and install with:
 pip install .
 ```
 
+## Testing
+
+To verify the installation (requires at least one GPU):
+
+```bash
+pytest 
+```
+
+CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
+Multi-GPU tests: Requires multiple available GPUs.
+
 ## Simple example
 
 Consider the case where we have 2 GPUs available and we are trying to solve the linear 
@@ -33,8 +44,8 @@ results in the following layout:
 <img src="resources/mat_example.png" alt="Matrix layout illustration" width="800">
 
 In order to interweave the blocks, we need to ensure that each shard is a multiple of
-`ndev * T_A = 4`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all-to-all`. As a result, we add zero padding of 2 columns to each shard.
-
+`ndev * T_A = 4`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all_to_all`. We therefore add zero padding of 2 columns to each shard (see top figure). After interweaving the blocks, we are left with extra padding on the right, which we ignore in the solver itself. After the solver is called, we again use a
+single `jax.lax.all_to_all` call to remap the data back to block-sharded form. 
 
 ```python
 import jax
@@ -66,16 +77,20 @@ which should print
 True
 ```
 
-## Testing
+## Current limitations
 
-To verify the installation (requires at least one GPU):
+The current version of `jaxmg` has the following limitations:
 
-```bash
-pytest 
-```
+- **No Hermitian matrices** We currently only have support for symmetric matrices. Complex numbers are supported on the cuSolverMg side, but would require some more development to deal with the XLA data strucutres jax provides.
 
-CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
-Multi-GPU tests: Requires multiple available GPUs.
+- **Potential invalid tilings:** It is possible that for a given $N\times N$ matrix the provided `T_A` does not allow one to use a single `jax.lax.all_to_all` call to bring the matrix to cyclic 1D form. In this case we raise an error, and suggest both a smaller and larger `T_A` that would enable the data remapping. This problem mostly occurs for small matrices, where the number of tiles is small and `T_A` is close to the shard size.
+
+- **Maximum tilings** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrf` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
+
+- **Maximum number of GPUs** According to the cuSolverMg documentation, the current maximum number of GPUs is 16. Going beyond this value will raise a an error from within CUDA code.
+
+- **No multi-node communcation** We are currently restricted to a single node. However, as of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to also eventually support this. The only complication is that cuSolverMp requires the matrix to be sharded in cyclic 2D form.
+
 
 ## Development
 
