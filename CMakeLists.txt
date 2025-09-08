@@ -88,16 +88,36 @@ add_library(potri SHARED
     src/cuda/shm.cc
     ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
 )
+add_library(syevd SHARED
+    src/cuda/syevd.cu
+    src/cuda/jax_utils.cc
+    src/cuda/shm.cc
+    ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
+)
+add_library(syevd_no_V SHARED
+    src/cuda/syevd_no_V.cu
+    src/cuda/jax_utils.cc
+    src/cuda/shm.cc
+    ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
+)
 
 # Make sure we can see "thirdparty/gpus" and jax
 target_include_directories(potrf PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(potri PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
+target_include_directories(syevd PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
+target_include_directories(syevd_no_V PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 
 # Set the CUDA architecture
 set_target_properties(potrf PROPERTIES
     CUDA_ARCHITECTURES "all"
 )
 set_target_properties(potri PROPERTIES
+    CUDA_ARCHITECTURES "all"
+)
+set_target_properties(syevd PROPERTIES
+    CUDA_ARCHITECTURES "all"
+)
+set_target_properties(syevd_no_V PROPERTIES
     CUDA_ARCHITECTURES "all"
 )
 
@@ -120,6 +140,25 @@ target_link_libraries(potri
     ${CUSOLVERMG_LIB}
     cuda
 )
+target_link_libraries(syevd
+    absl::strings
+    absl::status
+    absl::statusor
+    CUDA::cusolver
+    CUDA::cupti
+    ${CUSOLVERMG_LIB}
+    cuda
+)
+
+target_link_libraries(syevd_no_V
+    absl::strings
+    absl::status
+    absl::statusor
+    CUDA::cusolver
+    CUDA::cupti
+    ${CUSOLVERMG_LIB}
+    cuda
+)
 # Make install targets
 install(TARGETS potrf
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
@@ -127,5 +166,15 @@ install(TARGETS potrf
 install(TARGETS potri
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
+install(TARGETS syevd
+    LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
+)
+install(TARGETS syevd_no_V
+    LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
+)
 
+# cmake --build . --target potrf && cmake --install .
 # cmake --build . --target potri && cmake --install .
+# cmake --build . --target syevd && cmake --install .
+# cmake --build . --target syevd_no_V && cmake --install .
+

@@ -27,7 +27,7 @@ from jax import Array
 from jax.sharding import PartitionSpec as P
 
 from .utils import get_mesh_and_spec_from_array
-from .cyclic_1d import cyclic_1d_layout,undo_cyclic_1d_layout
+from .cyclic_1d import cyclic_1d_layout, undo_cyclic_1d_layout
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotri.so")
@@ -113,25 +113,17 @@ def potri(
         a = cyclic_1d_layout(a, T_A=T_A)
 
     out, status = jax.lax.platform_dependent(a, cuda=impl("potri_mg"))
+
     # print("pre symmetrize")
     # @partial(jax.jit, in_shardings=out.sharding, out_shardings=out.sharding)
     def symmetrize(L):
         L = jnp.tril(L)
         return L + L.T - jnp.diag(jnp.diag(L))
 
-    # print(out)
-    # print(out.sharding)
-    # print("out")
     if not cyclic_1d and len(mesh_a.devices) > 1:
         out = undo_cyclic_1d_layout(out, T_A)
-    out = symmetrize(out)   
-    # print(jnp.tril(out))
-    # for i, shard in enumerate(jnp.tril(out).addressable_shards):
-    #     print(f"Shard A {i} on device {shard.device}:")
-    #     print(shard.data)
-    # print("out.T")
-    # print(out.T)
-    # out = symmetrize(out)
+    out = symmetrize(out)
+
     if return_status:
         return out, status[0]
     else:

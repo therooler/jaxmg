@@ -55,6 +55,7 @@ if any("gpu" == d.platform for d in jax.devices()):
 
 from .potrf import potrf
 from .potri import potri
+from .syevd import syevd
 from .cyclic_1d import (
     cyclic_1d_layout,
     undo_cyclic_1d_layout,
@@ -66,6 +67,7 @@ from .cyclic_1d import (
 __all__ = [
     "potrf",
     "potri",
+    "syevd",
     "cyclic_1d_layout",
     "undo_cyclic_1d_layout",
     "manual_cyclic_1d_layout",
