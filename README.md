@@ -81,15 +81,15 @@ True
 
 The current version of `jaxmg` has the following limitations:
 
-- **No Hermitian matrices** We currently only have support for symmetric matrices. Complex numbers are supported on the cuSolverMg side, but would require some more development to deal with the XLA data strucutres jax provides.
+- **No Hermitian matrices:** We currently only have support for symmetric matrices. Complex numbers are supported on the cuSolverMg side, but would require some more development to deal with the XLA data strucutres jax provides.
 
 - **Potential invalid tilings:** It is possible that for a given $N\times N$ matrix the provided `T_A` does not allow one to use a single `jax.lax.all_to_all` call to bring the matrix to cyclic 1D form. In this case we raise an error, and suggest both a smaller and larger `T_A` that would enable the data remapping. This problem mostly occurs for small matrices, where the number of tiles is small and `T_A` is close to the shard size.
 
-- **Maximum tilings** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrf` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
+- **Maximum tilings:** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrf` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
 
-- **Maximum number of GPUs** According to the cuSolverMg documentation, the current maximum number of GPUs is 16. Going beyond this value will raise a an error from within CUDA code.
+- **Maximum number of GPUs:** According to the cuSolverMg documentation, the current maximum number of GPUs is 16. Going beyond this value will raise a an error from within CUDA code.
 
-- **No multi-node communcation** We are currently restricted to a single node. However, as of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to also eventually support this. The only complication is that cuSolverMp requires the matrix to be sharded in cyclic 2D form.
+- **No multi-node communcation:** We are currently restricted to a single node. However, as of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to also eventually support this. The only complication is that cuSolverMp requires the matrix to be sharded in cyclic 2D form.
 
 
 ## Development
