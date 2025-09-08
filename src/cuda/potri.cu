@@ -127,6 +127,7 @@ namespace jax
             const int lda = N;                            // leading dimension of local A
 
             /* CUDA */
+            cudaDataType compute_type = traits<data_type>::cuda_data_type;              // Data type for computation
             cudaLibMgMatrixDesc_t descrA;                                               // CusolverMg matrix descriptors
             cudaLibMgGrid_t gridA;                                                      // CusolverMg grid descriptors
             cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
@@ -138,7 +139,7 @@ namespace jax
             auto status_data = status->typed_data(); // Status returned by potri
             int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
             int64_t lwork_potri = 0;
-            
+
             /* Shared memory */
             static std::once_flag barrier_initialized; // Initialize barrier once between threads
             std::call_once(barrier_initialized, [&]()
@@ -184,7 +185,7 @@ namespace jax
                                                                     N,          /* number of columns of (global) A */
                                                                     N,          /* number or rows in a tile */
                                                                     T_A,        /* number of columns in a tile */
-                                                                    traits<data_type>::cuda_data_type, gridA));
+                                                                    compute_type, gridA));
             }
             if (VERBOSE)
             {
@@ -199,7 +200,7 @@ namespace jax
                 std::printf("%d: A = matlab base-1\n", currentDevice);
                 print_matrix(N, batch_a, A.data(), N);
             }
-            
+
             // std::printf("Step 8: Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
                                          /* input */
@@ -220,12 +221,12 @@ namespace jax
             {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                                                                     reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                                    traits<data_type>::cuda_data_type,
+                                                                    compute_type,
                                                                     &lwork_potrf));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotri_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                                                                     reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                                    traits<data_type>::cuda_data_type,
+                                                                    compute_type,
                                                                     &lwork_potri));
                 *shmlwork = std::max(lwork_potrf, lwork_potri);
             }
@@ -245,7 +246,7 @@ namespace jax
                 cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
-                    descrA, traits<data_type>::cuda_data_type,
+                    descrA, compute_type,
                     reinterpret_cast<void **>(shmwork), *shmlwork, &info);
 
                 if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
@@ -267,7 +268,7 @@ namespace jax
 
                 cusolver_status = cusolverMgPotri(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                                                   reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                  traits<data_type>::cuda_data_type,
+                                                  compute_type,
                                                   reinterpret_cast<void **>(shmwork), *shmlwork,
                                                   &info);
 

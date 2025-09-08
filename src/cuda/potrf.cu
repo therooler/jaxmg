@@ -141,6 +141,7 @@ namespace jax
             const int ldb = N;                      // leading dimension of local b
 
             /* CUDA */
+            cudaDataType compute_type = traits<data_type>::cuda_data_type; // Data type for computation
             cudaLibMgMatrixDesc_t descrA; // CusolverMg matrix descriptors
             cudaLibMgMatrixDesc_t descrB;
             cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
@@ -204,14 +205,14 @@ namespace jax
                                                                     N,          /* number of columns of (global) A */
                                                                     N,          /* number or rows in a tile */
                                                                     T_A,        /* number of columns in a tile */
-                                                                    traits<data_type>::cuda_data_type, gridA));
+                                                                    compute_type, gridA));
 
                 /* (global) B is N-by-NRHS */
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrB, N, /* number of rows of (global) B */
                                                                     NRHS,       /* number of columns of (global) B */
                                                                     N,          /* number or rows in a tile */
                                                                     T_B,        /* number of columns in a tile */
-                                                                    traits<data_type>::cuda_data_type, gridB));
+                                                                    compute_type, gridB));
             }
             if (VERBOSE)
             {
@@ -289,14 +290,14 @@ namespace jax
                                                                     //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
                                                                     reinterpret_cast<void **>(shmA), IA, /* base-1 */
                                                                     JA,                                  /* base-1 */
-                                                                    descrA, traits<data_type>::cuda_data_type, &lwork_potrf));
+                                                                    descrA, compute_type, &lwork_potrf));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrs_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
                                                                                                                 //   reinterpret_cast<void **>(array_d_A.data()), IA, JA,
                                                                     reinterpret_cast<void **>(shmA), IA, JA,
                                                                     //   descrA, reinterpret_cast<void **>(array_d_B.data()),
                                                                     descrA, reinterpret_cast<void **>(shmB),
-                                                                    IB, JB, descrB, traits<data_type>::cuda_data_type,
+                                                                    IB, JB, descrB, compute_type,
                                                                     &lwork_potrs));
                 *shmlwork = std::max(lwork_potrf, lwork_potrs);
             }
@@ -317,7 +318,7 @@ namespace jax
                 cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
-                    descrA, traits<data_type>::cuda_data_type,
+                    descrA, compute_type,
                     reinterpret_cast<void **>(shmwork), *shmlwork, &info);
 
                 if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
@@ -340,7 +341,7 @@ namespace jax
                 cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
                                                   reinterpret_cast<void **>(shmA), IA, JA, descrA,
                                                   reinterpret_cast<void **>(shmB), IB, JB, descrB,
-                                                  traits<data_type>::cuda_data_type,
+                                                  compute_type,
                                                   reinterpret_cast<void **>(shmwork), *shmlwork,
                                                   &info);
 
