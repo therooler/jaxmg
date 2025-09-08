@@ -14,7 +14,7 @@ from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
 from jaxmg import potri
 from jaxmg.utils import random_psd
-
+from functools import partial
 
 if any("gpu" == d.platform for d in jax.devices()):
     print("Running on GPU")
@@ -27,7 +27,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         mesh = jax.make_mesh((ndev,), ("x",))
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-        out = potri(A, T_A=T_A)
+        out = jax.jit(
+            partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+        )(A, T_A=T_A)
         expected_out = jnp.diag(1.0 / (jnp.arange(N, dtype=dtype) + 1))
         assert jnp.allclose(out, expected_out)
 
@@ -39,7 +41,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         mesh = jax.make_mesh((ndev,), ("x",))
         _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-        out = potri(_A, T_A=T_A)
+        out = jax.jit(
+            partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+        )(A, T_A=T_A)
         norm_potri = jnp.linalg.norm(A @ out - jnp.eye(N, dtype=dtype))
         norm_lax = jnp.linalg.norm(A @ expected_out - jnp.eye(N, dtype=dtype))
         assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=0.0)

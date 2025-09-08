@@ -12,6 +12,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
+from functools import partial
 from jaxmg import syevd
 from jaxmg.utils import random_psd
 
@@ -28,7 +29,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         mesh = jax.make_mesh((ndev,), ("x",))
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-        eigenvalues, V = syevd(A, T_A=T_A)
+        eigenvalues, V = jax.jit(
+            partial(syevd, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+        )(A, T_A=T_A)
         assert jnp.allclose(eigenvalues_expected, eigenvalues)
         eigenvalus_VtAV = jnp.diag(V.T @ A @ V)
         assert jnp.allclose(eigenvalus_VtAV, eigenvalues_expected)
@@ -41,7 +44,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         mesh = jax.make_mesh((ndev,), ("x",))
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-        eigenvalues, V = syevd(A, T_A=T_A)
+        eigenvalues, V = jax.jit(
+            partial(syevd, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+        )(A, T_A=T_A)
         norm_syevd = jnp.linalg.norm(V.T @ A - jnp.diag(eigenvalues) @ V)
         norm_lax = jnp.linalg.norm(
             V_expected.T @ A - jnp.diag(eigenvalues_expected) @ V_expected
@@ -56,7 +61,12 @@ if any("gpu" == d.platform for d in jax.devices()):
         mesh = jax.make_mesh((ndev,), ("x",))
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-        eigenvalues = syevd(A, T_A=T_A, return_eigenvectors=False)
+        eigenvalues = jax.jit(
+            partial(
+                syevd, mesh=mesh, in_specs=(P(None, "x"),), return_eigenvectors=False
+            ),
+            static_argnums=1,
+        )(A, T_A=T_A)
         assert jnp.allclose(eigenvalues_expected, eigenvalues, rtol=10, atol=0.0)
 
     def cusolver_solve_psd_no_V(N, T_A, dtype):
@@ -66,7 +76,12 @@ if any("gpu" == d.platform for d in jax.devices()):
         # Make mesh and place data
         mesh = jax.make_mesh((ndev,), ("x",))
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-        eigenvalues = syevd(A, T_A=T_A, return_eigenvectors=False)
+        eigenvalues = jax.jit(
+            partial(
+                syevd, mesh=mesh, in_specs=(P(None, "x"),), return_eigenvectors=False
+            ),
+            static_argnums=1,
+        )(A, T_A=T_A)
 
         assert jnp.allclose(eigenvalues, eigenvalues_expected, rtol=10, atol=0.0)
 

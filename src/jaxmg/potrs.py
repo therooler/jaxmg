@@ -20,13 +20,14 @@ and packaging of the extension are useful for testing.
 import os
 import ctypes
 import jax
-
+from typing import Tuple
+from functools import partial
 import jax.numpy as jnp
 from jax import Array
-from jax.sharding import PartitionSpec as P
+from jax.sharding import PartitionSpec as P, Mesh
 
 from .utils import get_mesh_and_spec_from_array
-from .cyclic_1d import cyclic_1d_layout
+from .cyclic_1d import cyclic_1d_layout, _cyclic_1d
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotrs.so")
@@ -41,6 +42,8 @@ def potrs(
     a: Array,
     b: Array,
     T_A: int,
+    mesh: Mesh,
+    in_specs: Tuple[P],
     cyclic_1d: bool = False,
     return_status: bool = False,
 ):
@@ -79,8 +82,9 @@ def potrs(
     assert a.ndim == 2, "a must be a 2D array."
     assert b.ndim == 2, "b must be a 2D array."
 
-    mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    mesh_b, spec_b = get_mesh_and_spec_from_array(b)
+    assert len(in_specs)==2
+    spec_a, spec_b = in_specs
+    ndev = len(jax.devices("gpu"))
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
         raise ValueError(
             "A must be sharded along the columns with PartitionSpec P(None, str)."
@@ -89,37 +93,36 @@ def potrs(
         raise ValueError(
             "b must be replicated along all shards with PartitionSpec P(None, None)."
         )
-    if mesh_a != mesh_b:
-        raise ValueError("A and b must be on the same mesh.")
+    out_type = (
+        jax.ShapeDtypeStruct(b.shape, b.dtype),
+        jax.ShapeDtypeStruct((1,), jnp.int32),
+    )
+    input_layouts = (
+        (1, 0),
+        (1, 0),
+    )
+    output_layouts = ((1, 0), (0,))
+    out_specs = (spec_b, P(spec_a._partitions[1]))
 
-    def impl(target_name):
-        out_type = (
-            jax.ShapeDtypeStruct(b.shape, b.dtype),
-            jax.ShapeDtypeStruct((1,), jnp.int32),
-        )
-        fn = lambda _a, _b: jax.ffi.ffi_call(
-            target_name,
+    @partial(
+        jax.shard_map,
+        mesh=mesh,
+        in_specs=in_specs,
+        out_specs=out_specs,
+        check_vma=False,
+    )
+    def impl(_a, _b):
+        if not cyclic_1d and ndev > 1:
+            _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+        _b, status = jax.ffi.ffi_call(
+            "potrs_mg",
             out_type,
-            input_layouts=(
-                (1, 0),
-                (1, 0),
-            ),
-            output_layouts=((1, 0), (0,)),
-        )(_a, _b, T_A=int(T_A))
-        return jax.jit(
-            lambda _a, _b: jax.shard_map(
-                fn,
-                mesh=mesh_a,
-                in_specs=(spec_a, spec_b),
-                out_specs=(spec_b, P(spec_a._partitions[1])),
-                check_vma=False,
-            )(_a, _b), donate_argnums=(0,)
-        )
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+        )(_a, _b, T_A=T_A)
+        return _b, status
 
-    if not cyclic_1d and len(mesh_a.devices) > 1:
-        a = cyclic_1d_layout(a, T_A=T_A)
-        print("Done with cyclic")
-    out, status = jax.lax.platform_dependent(a, b, cuda=impl("potrs_mg"))
+    out, status = impl(a, b)
     if return_status:
         return out, status[0]
     else:

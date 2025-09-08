@@ -21,13 +21,18 @@ import os
 import ctypes
 from functools import partial
 import jax
-
+from typing import Tuple
 import jax.numpy as jnp
 from jax import Array
-from jax.sharding import PartitionSpec as P
+from jax.sharding import PartitionSpec as P, Mesh
 
 from .utils import get_mesh_and_spec_from_array
-from .cyclic_1d import cyclic_1d_layout, undo_cyclic_1d_layout
+from .cyclic_1d import (
+    cyclic_1d_layout,
+    undo_cyclic_1d_layout,
+    _cyclic_1d,
+    _undo_cyclic_1d,
+)
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libsyevd.so")
@@ -46,6 +51,8 @@ jax.ffi.register_ffi_target(
 def syevd(
     a: Array,
     T_A: int,
+    mesh: Mesh,
+    in_specs: Tuple[P],
     return_eigenvectors=True,
     cyclic_1d: bool = False,
     return_status: bool = False,
@@ -82,9 +89,14 @@ def syevd(
     """
 
     assert a.ndim == 2, "a must be a 2D array."
+    if isinstance(in_specs, tuple):
+        assert len(in_specs) == 1
+        (spec_a,) = in_specs
+    else:
+        spec_a = in_specs
 
-    mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    ndev = len(mesh_a.devices)
+    ndev = len(jax.devices("gpu"))
+
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
         raise ValueError(
             "A must be sharded along the columns with PartitionSpec P(None, str)."
@@ -93,60 +105,138 @@ def syevd(
         raise ValueError(
             "T_A has a maximum value of 1024 for SyevdMg, received T_A={T_A}"
         )
+    if return_eigenvectors:
+        target_name = "syevd_mg"
+        out_type = (
+            jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
+            jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
+            jax.ShapeDtypeStruct((1,), jnp.int32),
+        )
+        out_specs = (P(), spec_a, P(spec_a._partitions[1]))
+        output_layouts = ((0,), (1, 0), (0,))
 
-    def impl(target_name):
-        if target_name == "syevd_mg":
-            out_type = (
-                jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
-                jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
-                jax.ShapeDtypeStruct((1,), jnp.int32),
-            )
-            out_specs = (P(), spec_a, P(spec_a._partitions[1]))
-            output_layouts= ((0,), (1, 0), (0,))
-        elif target_name == "syevd_no_V_mg":
-            out_type = (
-                jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
-                jax.ShapeDtypeStruct((1,), jnp.int32),
-            )
-            out_specs = (P(), P(spec_a._partitions[1]))
-            output_layouts= ((0,), (0,))
-        else:
-            raise NotImplementedError()
+        @partial(
+            jax.shard_map,
+            mesh=mesh,
+            in_specs=in_specs,
+            out_specs=out_specs,
+            check_vma=False,
+        )
+        def impl(_a):
+            if not cyclic_1d and ndev > 1:
+                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
 
-        def fn(_a):
-            out = jax.ffi.ffi_call(
+            _ev, _a, status = jax.ffi.ffi_call(
                 target_name,
                 out_type,
                 input_layouts=((1, 0),),
                 output_layouts=output_layouts,
-            )(_a, T_A=int(T_A))
-            return out
+            )(_a, T_A=T_A)
 
-        return jax.jit(
-            lambda _a: jax.shard_map(
-                fn,
-                mesh=mesh_a,
-                in_specs=spec_a,
-                out_specs=out_specs,
-                check_vma=False,
-            )(_a)
-        )
-
-    if not cyclic_1d and len(mesh_a.devices) > 1:
-        a = cyclic_1d_layout(a, T_A=T_A)
-    if return_eigenvectors:
-        eigenvalues, V, status = jax.lax.platform_dependent(a, cuda=impl("syevd_mg"))
-        if not cyclic_1d and len(mesh_a.devices) > 1:
-            V = undo_cyclic_1d_layout(V, T_A)
+            if not cyclic_1d and ndev > 1:
+                _a = _undo_cyclic_1d(
+                    _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
+                )
+            return _ev, _a, status
+        eigenvalues, V, status = impl(a)
         if return_status:
             out = (eigenvalues, V, status)
         else:
             out = (eigenvalues, V)
     else:
-        eigenvalues, status = jax.lax.platform_dependent(a, cuda=impl("syevd_no_V_mg"))
+        target_name = "syevd_no_V_mg"
+        out_type = (
+            jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
+            jax.ShapeDtypeStruct((1,), jnp.int32),
+        )
+        out_specs = (P(), P(spec_a._partitions[1]))
+        output_layouts = ((0,), (0,))
+
+        @partial(
+            jax.shard_map,
+            mesh=mesh,
+            in_specs=in_specs,
+            out_specs=out_specs,
+            check_vma=False,
+        )
+        def impl(_a):
+            if not cyclic_1d and ndev > 1:
+                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+
+            _ev, status = jax.ffi.ffi_call(
+                target_name,
+                out_type,
+                input_layouts=((1, 0),),
+                output_layouts=output_layouts,
+            )(_a, T_A=T_A)
+            return _ev, status
+        eigenvalues, status = impl(a)
         if return_status:
-            out = (eigenvalues, status)
+            out = (eigenvalues,  status)
         else:
             out = eigenvalues
-    
     return out
+
+    # @partial(
+    #     jax.shard_map,
+    #     mesh=mesh,
+    #     in_specs=in_specs,
+    #     out_specs=out_specs,
+    #     check_vma=False,
+    # )
+    # def impl(_a):
+    #     if not cyclic_1d and ndev > 1:
+    #         _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+
+    #     if return_eigenvectors:
+    #         eigenvalues, _a, status = jax.ffi.ffi_call(
+    #             target_name,
+    #             out_type,
+    #             input_layouts=((1, 0),),
+    #             output_layouts=output_layouts,
+    #         )(_a, T_A=T_A)
+    #     else:
+    #         eigenvalues, status = jax.ffi.ffi_call(
+    #             target_name,
+    #             out_type,
+    #             input_layouts=((1, 0),),
+    #             output_layouts=output_layouts,
+    #         )(_a, T_A=T_A)
+
+    #     if not cyclic_1d and ndev > 1:
+    #         _a = _undo_cyclic_1d(
+    #             _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
+    #         )
+    #     if return_eigenvectors:
+    #         return eigenvalues, _a, status
+    #     else:
+    #         return eigenvalues, _a, status
+
+    #     return jax.jit(
+    #         lambda _a: jax.shard_map(
+    #             fn,
+    #             mesh=mesh_a,
+    #             in_specs=spec_a,
+    #             out_specs=out_specs,
+    #             check_vma=False,
+    #         )(_a)
+    #     )
+
+    # if not cyclic_1d and len(mesh_a.devices) > 1:
+    #     a = cyclic_1d_layout(a, T_A=T_A)
+    # if return_eigenvectors:
+    #     eigenvalues, V, status = jax.lax.platform_dependent(a, cuda=impl("syevd_mg"))
+    #     if not cyclic_1d and len(mesh_a.devices) > 1:
+    #         V = undo_cyclic_1d_layout(V, T_A)
+    #     if return_status:
+    #         out = (eigenvalues, V, status)
+    #     else:
+    #         out = (eigenvalues, V)
+    # else:
+    #     eigenvalues, status = jax.lax.platform_dependent(a, cuda=impl("syevd_no_V_mg"))
+    #     if return_status:
+    #         out = (eigenvalues, status)
+    #     else:
+    #         out = eigenvalues
+
+    # return out

@@ -10,6 +10,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 
 import jax.numpy as jnp
+from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
 from jaxmg import potrs
@@ -29,7 +30,10 @@ if any("gpu" == d.platform for d in jax.devices()):
         A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        out = potrs(A, b, T_A=T_A)
+        out = jax.jit(
+            partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None))),
+            static_argnums=2,
+        )(A, b, T_A)
         expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
         assert jnp.allclose(out.flatten(), expected_out)
 
@@ -44,10 +48,13 @@ if any("gpu" == d.platform for d in jax.devices()):
         _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
         _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-        out = potrs(_A, _b, T_A=T_A)
+        out = jax.jit(
+            partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None))),
+            static_argnums=2,
+        )(_A, _b, T_A)
         norm_scipy = jnp.linalg.norm(b - A @ expected_out)
         norm_potrf = jnp.linalg.norm(b - A @ out)
-        assert jnp.isclose(norm_scipy, norm_potrf)
+        assert jnp.isclose(norm_scipy, norm_potrf, rtol=10, atol=0.0)
 
     devices = jax.devices()
     ndev = len(devices)

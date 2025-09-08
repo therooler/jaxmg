@@ -19,8 +19,6 @@ and packaging of the extension are useful for testing.
 
 import os
 
-from mg_multi.src.jaxmg import potrs
-
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["JAX_TRACEBACK_FILTERING"] = "off"
 import ctypes
@@ -36,7 +34,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potri, syevd
+from src.jaxmg import potrs, syevd
 
 devices = jax.devices("gpu")
 
@@ -76,8 +74,14 @@ def main():
     print("Mat put on device")
 
     with jnp.printoptions(linewidth=500):
-        print(syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False))
-        eigenvalues, status = syevd(A, T_A=T_A, return_status=True, return_eigenvectors=False)
+        eigenvalues, status = syevd(
+            A,
+            T_A=T_A,
+            mesh=mesh,
+            in_specs=(P(None, "x"),),
+            return_status=True,
+            return_eigenvectors=True,
+        )
         print(eigenvalues)
         # print("V")
         # print(V)
@@ -134,6 +138,60 @@ def main2():
     print(f"Done, elapsed time { time.time() - start} [s]")
     assert jnp.allclose(b_before, A @ expected_out, rtol=jnp.finfo(dtype).eps)
     assert jnp.allclose(b_before, A @ out, rtol=jnp.finfo(dtype).eps)
+
+
+def main3():
+    ndev = len(devices)
+    print(f"Available devices: {ndev}")
+
+    # PARAMETERS
+    N = 2**17
+    T_A = 256
+    NRHS = 1
+    dtype = jnp.float32
+    # MESH
+    shard_size = N // ndev
+    mesh = jax.make_mesh((ndev,), ("x",))
+    if ndev > 1:
+
+        @jax.jit
+        @partial(jax.shard_map, mesh=mesh, in_specs=(), out_specs=P(None, "x"))
+        def make_diag():
+            idx = jax.lax.axis_index("x")  # device index
+            col_start = idx * shard_size  # global column offset
+            # Allocate zeros of shape (N, chunk_size)
+            local = jnp.zeros((N, shard_size), dtype=dtype)
+            # Global column indices handled by this shard
+            cols = jax.lax.iota(jnp.int32, shard_size) + col_start
+            # Rows = same as global cols (diagonal)
+            rows = cols
+            # Values for the diagonal
+            vals = cols + 1  # because your diag entries are 1..N
+            # Scatter into local slice (adjust columns relative to col_start)
+            local = local.at[(rows, cols - col_start)].set(vals)
+            return local
+
+    else:
+        make_diag = lambda: jax.device_put(
+            jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
+        )
+
+    myfn = partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
+
+    @jax.jit
+    def get_data():
+        A = make_diag()
+        b = jax.device_put(
+            jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
+        )
+        b = myfn(A, b, T_A)
+        return b
+
+    times = []
+
+    for i in range(3):
+        b = get_data()
+        print("Done")
 
 
 if __name__ == "__main__":

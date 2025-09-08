@@ -23,11 +23,13 @@ from functools import partial
 import jax
 
 import jax.numpy as jnp
+from typing import Tuple
+
 from jax import Array
-from jax.sharding import PartitionSpec as P
+from jax.sharding import PartitionSpec as P, Mesh
 
 from .utils import get_mesh_and_spec_from_array
-from .cyclic_1d import cyclic_1d_layout, undo_cyclic_1d_layout
+from .cyclic_1d import cyclic_1d_layout, undo_cyclic_1d_layout, _cyclic_1d, _undo_cyclic_1d
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotri.so")
@@ -41,6 +43,8 @@ jax.ffi.register_ffi_target(
 def potri(
     a: Array,
     T_A: int,
+    mesh: Mesh,
+    in_specs: Tuple[P] | P,
     cyclic_1d: bool = False,
     return_status: bool = False,
 ):
@@ -76,53 +80,73 @@ def potri(
     """
 
     assert a.ndim == 2, "a must be a 2D array."
+    if isinstance(in_specs, tuple):
+        assert len(in_specs)==1
+        (spec_a, ) = in_specs
+    else:
+        spec_a = in_specs
 
-    mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    ndev = len(mesh_a.devices)
+    ndev = len(jax.devices("gpu"))
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
         raise ValueError(
             "A must be sharded along the columns with PartitionSpec P(None, str)."
         )
+    out_type = (
+                jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
+                jax.ShapeDtypeStruct((1,), jnp.int32),
+            )
+    input_layouts=((1, 0),)
+    output_layouts=((1, 0), (0,))
+    out_specs = (spec_a, P(spec_a._partitions[1]))
+    @partial(
+        jax.shard_map,
+        mesh=mesh,
+        in_specs=in_specs,
+        out_specs=out_specs,
+        check_vma=False,
+    )
+    def impl(_a):
+        if not cyclic_1d and ndev > 1:
+            _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+        _a, status = jax.ffi.ffi_call(
+            "potri_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+        )(_a, T_A=T_A)
+        
+        if not cyclic_1d and ndev > 1:
+            _a = _undo_cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+        _a = jnp.tril(_a)
+        _a = _a + _a.T - jnp.diag(jnp.diag(_a))
 
-    def impl(target_name):
-        out_type = (
-            jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
-            jax.ShapeDtypeStruct((1,), jnp.int32),
-        )
+        return _a,status
 
-        def fn(_a):
-            out = jax.ffi.ffi_call(
-                target_name,
-                out_type,
-                input_layouts=((1, 0),),
-                output_layouts=((1, 0), (0,)),
-            )(_a, T_A=int(T_A))
-            return out
+        # return jax.jit(
+        #     lambda _a: jax.shard_map(
+        #         fn,
+        #         mesh=mesh_a,
+        #         in_specs=spec_a,
+        #         out_specs=(spec_a, P(spec_a._partitions[1])),
+        #         check_vma=False,
+        #     )(_a)
+        # )
 
-        return jax.jit(
-            lambda _a: jax.shard_map(
-                fn,
-                mesh=mesh_a,
-                in_specs=spec_a,
-                out_specs=(spec_a, P(spec_a._partitions[1])),
-                check_vma=False,
-            )(_a)
-        )
+    # if not cyclic_1d and len(mesh_a.devices) > 1:
+    #     a = cyclic_1d_layout(a, T_A=T_A)
 
-    if not cyclic_1d and len(mesh_a.devices) > 1:
-        a = cyclic_1d_layout(a, T_A=T_A)
-
-    out, status = jax.lax.platform_dependent(a, cuda=impl("potri_mg"))
+    # out, status = jax.lax.platform_dependent(a, cuda=impl("potri_mg"))
 
     # print("pre symmetrize")
     # @partial(jax.jit, in_shardings=out.sharding, out_shardings=out.sharding)
-    def symmetrize(L):
-        L = jnp.tril(L)
-        return L + L.T - jnp.diag(jnp.diag(L))
+    # def symmetrize(L):
+    #     L = jnp.tril(L)
+    #     return L + L.T - jnp.diag(jnp.diag(L))
 
-    if not cyclic_1d and len(mesh_a.devices) > 1:
-        out = undo_cyclic_1d_layout(out, T_A)
-    out = symmetrize(out)
+    # if not cyclic_1d and len(mesh_a.devices) > 1:
+    #     out = undo_cyclic_1d_layout(out, T_A)
+    # out = symmetrize(out)
+    out, status = impl(a)
 
     if return_status:
         return out, status[0]
