@@ -83,15 +83,19 @@ namespace jax
     {
         namespace ffi = ::xla::ffi;
 
-#define SOLVER_DISPATCH_IMPL(impl, ...)   \
-    switch (dataType)                     \
-    {                                     \
-    case ffi::F32:                        \
-        return impl<float>(__VA_ARGS__);  \
-    case ffi::F64:                        \
-        return impl<double>(__VA_ARGS__); \
-    default:                              \
-        break;                            \
+#define SOLVER_DISPATCH_IMPL(impl, ...)             \
+    switch (dataType)                               \
+    {                                               \
+    case ffi::F32:                                  \
+        return impl<float>(__VA_ARGS__);            \
+    case ffi::F64:                                  \
+        return impl<double>(__VA_ARGS__);           \
+    case ffi::C64:                                  \
+        return impl<gpuComplex>(__VA_ARGS__);       \
+    case ffi::C128:                                 \
+        return impl<gpuDoubleComplex>(__VA_ARGS__); \
+    default:                                        \
+        break;                                      \
     }
         template <typename data_type>
         ffi::Error SyevdMgImpl(int64_t N, int64_t batch_a,
@@ -102,7 +106,7 @@ namespace jax
                                ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            bool VERBOSE = false;                 // print matrices for debugging
+            // bool VERBOSE = false;                 // print matrices for debugging
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -122,7 +126,7 @@ namespace jax
             auto array_data_A = static_cast<data_type *>(a.untyped_data()); // XLA device pointer for a
             auto array_data_eigenvalues = static_cast<data_type *>(eigenvalues->untyped_data());
             auto array_data_V = static_cast<data_type *>(V->untyped_data());
-            std::vector<data_type> eigenvalues_host(N, 0);
+            std::vector<typename traits<data_type>::S> eigenvalues_host(N, 0.); // Make vector of Real datatype
 
             /* Tiling sizes */
             const int IA = 1; // index within a global matrix, base-1 (not used)
@@ -131,16 +135,17 @@ namespace jax
             const int lda = N;                            // leading dimension of local A
 
             /* CUDA */
-            cudaDataType compute_type = traits<data_type>::cuda_data_type;              // Data type for computation
-            cudaLibMgMatrixDesc_t descrA;                                               // CusolverMg matrix descriptors
-            cudaLibMgGrid_t gridA;                                                      // CusolverMg grid descriptors
-            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
-            cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR;                          // Wether to return both eigenvectors and eigenvalues
-            FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
+            cudaDataType compute_type = traits<data_type>::cuda_data_type;                        // Data type for computation
+            cudaDataType eigenvalue_type = traits<typename traits<data_type>::S>::cuda_data_type; // Real data type used
+            cudaLibMgMatrixDesc_t descrA;                                                         // CusolverMg matrix descriptors
+            cudaLibMgGrid_t gridA;                                                                // CusolverMg grid descriptors
+            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;                   // Column major a la Scalapack
+            cusolverEigMode_t jobz = CUSOLVER_EIG_MODE_VECTOR;                                    // Wether to return both eigenvectors and eigenvalues
+            FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream));           // Assign a cusolver handle from the pool
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
             int info = 0;                     // Info used by cusolverMg calls
             cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
-            int cusolver_status_host;
+            int32_t cusolver_status_host;
             auto status_data = status->typed_data(); // Status returned by syevd
             int64_t lwork_syevd = 0;                 // Workspace size used by cusolverMg calls
 
@@ -167,12 +172,12 @@ namespace jax
                     deviceList[j] = j;
                     cudaDeviceProp prop;
                     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                    if (VERBOSE)
-                    {
-                        std::printf("\tThere are %d GPUs \n", nbGpus);
-                        std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
-                        std::printf("T_A: %d \n", T_A);
-                    }
+                    // if (VERBOSE)
+                    // {
+                    //     std::printf("\tThere are %d GPUs \n", nbGpus);
+                    //     std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
+                    //     std::printf("T_A: %d \n", T_A);
+                    // }
                 }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
@@ -191,19 +196,19 @@ namespace jax
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
             }
-            if (VERBOSE)
-            {
-                std::printf("Step 3: Print data on host \n");
-                std::vector<data_type> A(batch_a * N, 0);
-                gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-                for (int i = 0; i < batch_a * N; i++)
-                {
-                    std::cout << A[i] << std::endl;
-                }
+            // if (VERBOSE)
+            // {
+            //     std::printf("Step 3: Print data on host \n");
+            //     std::vector<data_type> A(batch_a * N, 0);
+            //     gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
+            //     for (int i = 0; i < batch_a * N; i++)
+            //     {
+            //         std::cout << A[i] << std::endl;
+            //     }
 
-                std::printf("%d: A = matlab base-1\n", currentDevice);
-                print_matrix(N, batch_a, A.data(), N);
-            }
+            //     std::printf("%d: A = matlab base-1\n", currentDevice);
+            //     print_matrix(N, batch_a, A.data(), N);
+            // }
 
             // std::printf("Step 8: Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
@@ -226,7 +231,7 @@ namespace jax
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgSyevd_bufferSize(cusolverH, jobz, CUBLAS_FILL_MODE_LOWER, N,
                                                                     reinterpret_cast<void **>(shmA), IA, JA, descrA,
                                                                     reinterpret_cast<void *>(eigenvalues_host.data()),
-                                                                    compute_type, compute_type,
+                                                                    eigenvalue_type, compute_type,
                                                                     &lwork_syevd));
 
                 *shmlwork = lwork_syevd;
@@ -248,19 +253,15 @@ namespace jax
                     cusolverH, jobz, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, reinterpret_cast<void **>(eigenvalues_host.data()),
-                    compute_type, compute_type,
+                    eigenvalue_type, compute_type,
                     reinterpret_cast<void **>(shmwork), *shmlwork, &info);
-
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
+                cusolver_status_host = static_cast<int32_t>(cusolver_status);
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
                 /* check if A is singular */
                 if (0 > info)
                 {
@@ -275,7 +276,7 @@ namespace jax
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
                 array_data_eigenvalues, eigenvalues_host.data(), sizeof(data_type) * N, gpuMemcpyHostToDevice, stream));
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                    array_data_V, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+                array_data_V, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice, stream));
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -313,10 +314,10 @@ namespace jax
             // Columns are batched
             FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
 
-            if ((dataType != V->element_type()) || (dataType != eigenvalues->element_type()))
+            if ((dataType != V->element_type()))
             {
                 return ffi::Error::InvalidArgument(
-                    "The input and output to getrf must have the same element type");
+                    "The input matrix and output eigenvector dtype of syevd must have the same element type");
             }
             FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "syevd"));
 

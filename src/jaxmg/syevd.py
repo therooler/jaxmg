@@ -32,6 +32,7 @@ from .cyclic_1d import (
     _cyclic_1d,
     _undo_cyclic_1d,
 )
+from .utils import maybe_real_dtype_from_complex
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libsyevd.so")
@@ -108,7 +109,7 @@ def syevd(
     if return_eigenvectors:
         target_name = "syevd_mg"
         out_type = (
-            jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
+            jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
             jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
@@ -147,7 +148,7 @@ def syevd(
     else:
         target_name = "syevd_no_V_mg"
         out_type = (
-            jax.ShapeDtypeStruct((a.shape[0],), a.dtype),
+            jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
         out_specs = (P(), P(spec_a._partitions[1]))
