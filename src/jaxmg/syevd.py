@@ -106,11 +106,14 @@ def syevd(
         raise ValueError(
             "T_A has a maximum value of 1024 for SyevdMg, received T_A={T_A}"
         )
+    shard_size = a.shape[0] // ndev
+    shard_size_needed = shard_size + (T_A - (shard_size % T_A)) % T_A
+
     if return_eigenvectors:
         target_name = "syevd_mg"
         out_type = (
             jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
-            jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
+            jax.ShapeDtypeStruct((a.shape[0], shard_size_needed), a.dtype),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
         out_specs = (P(), spec_a, P(spec_a._partitions[1]))

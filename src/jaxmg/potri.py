@@ -12,8 +12,9 @@ from typing import Tuple
 from .cyclic_1d import (
     _cyclic_1d,
     _undo_cyclic_1d,
+    calculate_padding
 )
-
+from .utils import symmetrize
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotri.so")
 library = ctypes.cdll.LoadLibrary(SHARED_LIBRARY)
@@ -79,8 +80,11 @@ def potri(
         raise ValueError(
             "`a` must be sharded along the columns with PartitionSpec P(None, str)."
         )
+    shard_size = a.shape[0] // ndev
+    shard_size_needed = shard_size + (T_A - (shard_size % T_A)) % T_A
+    
     out_type = (
-        jax.ShapeDtypeStruct((a.shape[0], a.shape[1] // ndev), a.dtype),
+        jax.ShapeDtypeStruct((a.shape[0], shard_size_needed), a.dtype),
         jax.ShapeDtypeStruct((1,), jnp.int32),
     )
     input_layouts = ((1, 0),)
@@ -97,6 +101,7 @@ def potri(
     def impl(_a):
         if not cyclic_1d and ndev > 1:
             _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+
         _a, status = jax.ffi.ffi_call(
             "potri_mg",
             out_type,
@@ -108,13 +113,10 @@ def potri(
             _a = _undo_cyclic_1d(
                 _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
             )
-        _a = jnp.tril(_a)
-        _a = _a + _a.T.conj() - jnp.diag(jnp.diag(_a))
-
         return _a, status
 
     out, status = impl(a)
-
+    out = symmetrize(out)
     if return_status:
         return out, status[0]
     else:
