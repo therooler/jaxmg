@@ -16,126 +16,118 @@ from jaxmg import potri
 from jaxmg.utils import random_psd
 from functools import partial
 
-if any("gpu" == d.platform for d in jax.devices()):
-    print("Running on GPU")
-    jax.config.update("jax_platforms", "gpu")
+devices = [d for d in jax.devices() if d.platform == "gpu"]
+ndev = len(devices)
 
-    def cusolver_solve_arange(N, T_A, dtype):
-        A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
-        ndev = len(devices)
-        # Make mesh and place data
-        mesh = jax.make_mesh((ndev,), ("x",))
-        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+pytestmark = pytest.mark.skipif(
+    ndev not in {1, 2, 4},
+    reason="Tests require 1, 2, or 4 GPUs"
+)
 
-        out = jax.jit(
-            partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
-        )(A, T_A=T_A)
-        expected_out = jnp.diag(1.0 / (jnp.arange(N, dtype=dtype) + 1))
-        assert jnp.allclose(out, expected_out)
+mesh = jax.make_mesh((ndev,), ("x",))
 
-    def cusolver_solve_psd(N, T_A, dtype):
-        A = random_psd(N, dtype=dtype, seed=1234)
-        expected_out = jnp.linalg.inv(A)
-        ndev = len(devices)
-        # Make mesh and place data
-        mesh = jax.make_mesh((ndev,), ("x",))
-        _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-        out = jax.jit(
-            partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
-        )(_A, T_A=T_A)
-        assert jnp.allclose(A.conj().T, A)
-        norm_potri = jnp.linalg.norm(A @ out - jnp.eye(N, dtype=dtype))
-        norm_lax = jnp.linalg.norm(A @ expected_out - jnp.eye(N, dtype=dtype))
-        assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=0.0)
 
-    devices = jax.devices()
-    ndev = len(devices)
-    mesh = jax.make_mesh((ndev,), ("x",))
+def cusolver_solve_arange(N, T_A, dtype):
+    A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
+    # Make mesh and place data
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
-    if ndev == 1:
-        print("Running block_cyclic test with 1 device.")
+    out = jax.jit(
+        partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+    )(A, T_A=T_A)
+    expected_out = jnp.diag(1.0 / (jnp.arange(N, dtype=dtype) + 1))
+    assert jnp.allclose(out, expected_out)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 3))
-        @pytest.mark.parametrize("N", (4, 8, 10, 12))
-        def test_cusolver_solve_arange_dev_1(N, T_A, dtype):
-            cusolver_solve_arange(N, T_A, dtype)
+def cusolver_solve_psd(N, T_A, dtype):
+    A = random_psd(N, dtype=dtype, seed=1234)
+    expected_out = jnp.linalg.inv(A)
+    # Make mesh and place data
+    _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    out = jax.jit(
+        partial(potri, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
+    )(_A, T_A=T_A)
+    assert jnp.allclose(A.conj().T, A)
+    norm_potri = jnp.linalg.norm(A @ out - jnp.eye(N, dtype=dtype))
+    norm_lax = jnp.linalg.norm(A @ expected_out - jnp.eye(N, dtype=dtype))
+    assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=0.0)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 3))
-        @pytest.mark.parametrize("N", (4, 8, 10, 12))
-        def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
-            cusolver_solve_psd(N, T_A, dtype)
 
-    elif ndev == 2:
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_arange_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
+    cusolver_solve_arange(N, T_A, dtype)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 3))
-        @pytest.mark.parametrize("N", (8, 10, 12))
-        def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
-            cusolver_solve_arange(N, T_A, dtype)
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
+    cusolver_solve_psd(N, T_A, dtype)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 3))
-        @pytest.mark.parametrize("N", (8, 10, 12))
-        def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
-            cusolver_solve_psd(N, T_A, dtype)
 
-    elif ndev == 4:
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (8, 10, 12))
+def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_arange(N, T_A, dtype)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 4))
-        @pytest.mark.parametrize("N", (48, 60))
-        def test_cusolver_solve_arange_dev_4(N, T_A, dtype):
-            cusolver_solve_arange(N, T_A, dtype)
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (8, 10, 12))
+def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_psd(N, T_A, dtype)
 
-        @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-        @pytest.mark.parametrize("T_A", (1, 2, 4))
-        @pytest.mark.parametrize("N", (48, 60))
-        def test_cusolver_solve_psd_dev_4(N, T_A, dtype):
-            cusolver_solve_psd(N, T_A, dtype)
 
-    else:
-        print("Test only works for 1,2 and 4 GPUs")
-        assert True
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 4))
+@pytest.mark.parametrize("N", (48, 60))
+def test_cusolver_solve_arange_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
+    cusolver_solve_arange(N, T_A, dtype)
 
-    def test_potri_assert_a_2d():
-        N = 4
-        T_A = 1
-        dtype = jnp.float32
-        devices = jax.devices()
-        mesh = jax.make_mesh((len(devices),), ("x",))
-        A = jnp.ones((N,), dtype=dtype)  # Not 2D
-        A = jax.device_put(A, NamedSharding(mesh, P("x")))
-        with pytest.raises(AssertionError, match="a must be a 2D array"):
-            potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x"),))
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 4))
+@pytest.mark.parametrize("N", (48, 60))
+def test_cusolver_solve_psd_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
+    cusolver_solve_psd(N, T_A, dtype)
 
-    def test_potri_assert_in_specs_len():
-        N = 4
-        T_A = 1
-        dtype = jnp.float32
-        devices = jax.devices()
-        mesh = jax.make_mesh((len(devices),), ("x",))
-        A = jnp.eye(N, dtype=dtype)
-        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-        # Pass tuple of length 2
-        with pytest.raises(AssertionError, match="expected only one `in_specs`"):
-            potri(A, T_A=T_A, mesh=mesh, in_specs=(P(None, "x"), P(None, "x")))
 
-    def test_potri_valueerror_spec_a():
-        N = 4
-        T_A = 1
-        dtype = jnp.float32
-        devices = jax.devices()
-        mesh = jax.make_mesh((len(devices),), ("x",))
-        A = jnp.eye(N, dtype=dtype)
-        # Wrong sharding: first axis sharded
-        A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-        with pytest.raises(ValueError, match="must be sharded along the columns"):
-            potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x", None),))
+def test_potri_assert_a_2d():
+    N = 4
+    T_A = 1
+    dtype = jnp.float32
+    A = jnp.ones((N,), dtype=dtype)  # Not 2D
+    A = jax.device_put(A, NamedSharding(mesh, P("x")))
+    with pytest.raises(AssertionError, match="a must be a 2D array"):
+        potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x"),))
 
-else:
+def test_potri_assert_in_specs_len():
+    N = 4
+    T_A = 1
+    dtype = jnp.float32
+    A = jnp.eye(N, dtype=dtype)
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    # Pass tuple of length 2
+    with pytest.raises(AssertionError, match="expected only one `in_specs`"):
+        potri(A, T_A=T_A, mesh=mesh, in_specs=(P(None, "x"), P(None, "x")))
 
-    def test_skip_gpu():
-        print("Skipping GPU tests, no GPU available.")
-        assert True
+def test_potri_valueerror_spec_a():
+    N = 4
+    T_A = 1
+    dtype = jnp.float32
+    A = jnp.eye(N, dtype=dtype)
+    # Wrong sharding: first axis sharded
+    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    with pytest.raises(ValueError, match="must be sharded along the columns"):
+        potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x", None),))
