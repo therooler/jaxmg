@@ -165,6 +165,7 @@ namespace jax
             std::call_once(barrier_initialized, [&]()
                            { sync_point.initialize(nbGpus); });
             sync_point.arrive_and_wait();
+
             sharedMemoryInfo shminfoA; // Shared memory info for device pointers to local matrices
             sharedMemoryInfo shminfoB;
             sharedMemoryInfo shminfowork;
@@ -259,6 +260,8 @@ namespace jax
             for PotRf.
             */
             // std::printf("Step 8: Relayout data \n");
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            // std::printf("Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
@@ -287,9 +290,9 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Step 9: Allocate workspace \n");
             if (currentDevice == 0)
             {
+                // std::printf("Get buffersize \n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                                                                     //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
                                                                     reinterpret_cast<void **>(shmA), IA, /* base-1 */
@@ -306,7 +309,6 @@ namespace jax
                 *shmlwork = std::max(lwork_potrf, lwork_potrs);
             }
             sync_point.arrive_and_wait();
-            // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
             FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (*shmlwork), "workspace_potrf"));
@@ -318,7 +320,7 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                // std::printf("Step 10: Solve A*X = B by POTRF and POTRS \n");
+                // std::printf("POTRF\n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
@@ -334,7 +336,7 @@ namespace jax
                     return ffi::Error::Internal(
                         absl::StrFormat("unexpected error in cusolverMgPotrf, %d-th input parameter is wrong \n", -info));
                 }
-
+                // std::printf("POTRS\n");
                 cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
                                                   reinterpret_cast<void **>(shmA), IA, JA, descrA,
                                                   reinterpret_cast<void **>(shmB), IB, JB, descrB,
@@ -360,14 +362,13 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Step 11: Solution vector B \n");
-
-            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                out_data, shmB[0], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+            // std::printf("Copy solution vector B \n");
 
             if (currentDevice == 0)
             {
                 // std::printf("Step 12: Free resources \n");
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    out_data, shmB[0], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrA));
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrB));
@@ -385,6 +386,7 @@ namespace jax
                     // std::printf("%d: Shared memory destroyed\n", currentDevice);
                 }
             }
+            // std::printf("Waiting for devices to exit\n");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
