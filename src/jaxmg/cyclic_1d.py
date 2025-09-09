@@ -36,13 +36,14 @@ def _cyclic_1d(x_block: Array, T_A: int, ndev: int, axis_name: str):
     """
     N, shard_size = x_block.shape  # input is (N, N // ndev), columns
 
+    # If the tile size is larger than the shard the matrix is already in 1D block cyclic form
+    if T_A >= shard_size:
+        return x_block
+
     if shard_size < ndev:
         raise ValueError(
             f"We require shard_size >= ndev, but received shard_size = {shard_size} with {ndev} devices."
         )
-    # If the tile size is larger than the shard the matrix is already in 1D block cyclic form
-    if T_A >= shard_size:
-        return x_block
     # To ensure unique tile ownership per device we need to pad the matrices
     # with zeros and shift the columns over the devices. The target is therefore
     # A matrix that is a multiple of T_A * ndev
