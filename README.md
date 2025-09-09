@@ -114,7 +114,7 @@ cmake --build . --target install
 This installs the CUDA binaries into src/jaxmg/bin.
 
 Dependencies are managed with [CPM-CMAKE](https://github.com/cpm-cmake/CPM.cmake),
-including **abseil-cpp**, **jaxlib**, **XLA** for compilation. Compilation requires C++17 or later.
+including **abseil-cpp**, **jaxlib**, **XLA** for compilation. Compilation requires C++20 or later.
 To build specific targets only, for example potrs:
 ```bash
 cmake ..
