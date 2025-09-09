@@ -27,7 +27,6 @@ pytestmark = pytest.mark.skipif(
 mesh = jax.make_mesh((ndev,), ("x",))
 
 
-
 def cusolver_solve_arange(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     eigenvalues_expected = jnp.diag(A)
@@ -97,24 +96,32 @@ def cusolver_solve_psd_no_V(N, T_A, dtype):
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (4, 8, 10, 12))
 def test_cusolver_solve_arange_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_arange(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (4, 8, 10, 12))
 def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_psd(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (4, 8, 10, 12))
 def test_cusolver_solve_arange_no_v_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_arange_no_V(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (4, 8, 10, 12))
 def test_cusolver_solve_psd_no_v_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_psd_no_V(N, T_A, dtype)
 
 
@@ -122,24 +129,32 @@ def test_cusolver_solve_psd_no_v_dev_1(N, T_A, dtype):
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (8, 10, 12))
 def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_arange(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (8, 10, 12))
 def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_psd(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (8, 10, 12))
 def test_cusolver_solve_arange_no_v_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_arange_no_V(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 3))
 @pytest.mark.parametrize("N", (8, 10, 12))
 def test_cusolver_solve_psd_no_v_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_psd_no_V(N, T_A, dtype)
 
 
@@ -147,22 +162,30 @@ def test_cusolver_solve_psd_no_v_dev_2(N, T_A, dtype):
 @pytest.mark.parametrize("T_A", (1, 2, 4))
 @pytest.mark.parametrize("N", (48, 60))
 def test_cusolver_solve_arange_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
     cusolver_solve_arange(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 4))
 @pytest.mark.parametrize("N", (48, 60))
 def test_cusolver_solve_psd_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
     cusolver_solve_psd(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 4))
 @pytest.mark.parametrize("N", (48, 60))
 def test_cusolver_solve_arange_no_v_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
     cusolver_solve_arange_no_V(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64))
 @pytest.mark.parametrize("T_A", (1, 2, 4))
 @pytest.mark.parametrize("N", (48, 60))
 def test_cusolver_solve_arange_no_v_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
     cusolver_solve_psd_no_V(N, T_A, dtype)

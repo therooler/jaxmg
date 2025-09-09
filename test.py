@@ -34,8 +34,8 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potrs, syevd
-
+from src.jaxmg import potrs, syevd, potri
+from src.jaxmg.utils import random_psd
 devices = jax.devices("gpu")
 
 
@@ -45,7 +45,7 @@ def random_psd(n, dtype, seed):
     """
     key = jax.random.key(seed)
     A = jax.random.normal(key, (n, n), dtype=dtype) / jnp.sqrt(n)
-    return A @ A.T + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
+    return A @ A.T.conj() + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
 
 
 def main():
@@ -54,7 +54,7 @@ def main():
     print(N)
     NRHS = 1
     T_A = 2
-    dtype = jnp.float64
+    dtype = jnp.complex64
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     ndev = len(devices)
@@ -67,11 +67,10 @@ def main():
     _A = random_psd(N, dtype, seed=0)
     # _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
     eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
-    print(V_expected)
+    # print(V_expected)
     print(eigenvalues_expected)
     A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
 
-    print("Mat put on device")
 
     with jnp.printoptions(linewidth=500):
         eigenvalues, status = syevd(
@@ -80,16 +79,15 @@ def main():
             mesh=mesh,
             in_specs=(P(None, "x"),),
             return_status=True,
-            return_eigenvectors=True,
+            return_eigenvectors=False,
         )
         print(eigenvalues)
         # print("V")
         # print(V)
         # eigenvalus_VtAV = jnp.diag(V.T @ _A @ V)
-        print(eigenvalues)
         # print(eigenvalus_VtAV)
-        print(eigenvalues_expected)
-        assert jnp.allclose(eigenvalues, eigenvalues_expected)
+        # print(eigenvalues_expected)
+        assert jnp.allclose(eigenvalues, eigenvalues_expected, atol=1e-5)
 
 
 def main2():
@@ -145,10 +143,10 @@ def main3():
     print(f"Available devices: {ndev}")
 
     # PARAMETERS
-    N = 2**17
+    N = 2**2
     T_A = 256
     NRHS = 1
-    dtype = jnp.float32
+    dtype = jnp.complex128
     # MESH
     shard_size = N // ndev
     mesh = jax.make_mesh((ndev,), ("x",))
@@ -172,25 +170,38 @@ def main3():
             return local
 
     else:
+        # make_diag = lambda: jax.device_put(
+        #     jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
+        # )
         make_diag = lambda: jax.device_put(
-            jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
+            random_psd(N, dtype=dtype, seed=1234), NamedSharding(mesh, P(None, "x"))
         )
 
-    myfn = partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
+    myfn = partial(potri, mesh=mesh, in_specs=(P(None, "x")), return_status=True)
+    # myfn = partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
 
     @jax.jit
     def get_data():
         A = make_diag()
-        b = jax.device_put(
-            jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
-        )
-        b = myfn(A, b, T_A)
-        return b
+        # b = jax.device_put(
+        #     jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
+        # )
+        Ainv, status = myfn(A, T_A)
+        return A, Ainv, status
 
     times = []
-
     for i in range(3):
-        b = get_data()
+        A, Ainv, status= get_data()
+        print(status)
+        print(jnp.linalg.eigvals(A))
+        print(A @ Ainv)
+        Ainvlax = jnp.linalg.inv(A)
+        residual = A @ Ainv
+        residual_lax = A @ Ainvlax
+        error = jnp.linalg.norm(residual - jnp.eye(A.shape[0], dtype=A.dtype), ord="fro")
+        errorlax = jnp.linalg.norm(residual_lax - jnp.eye(A.shape[0], dtype=A.dtype), ord="fro")
+        print(error)
+        print(errorlax)
         print("Done")
 
 

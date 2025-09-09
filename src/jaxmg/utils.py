@@ -25,5 +25,9 @@ def get_mesh_and_spec_from_array(a: Array):
 def maybe_real_dtype_from_complex(dtype):
     return jnp.float32 if dtype == jnp.complex64 else (jnp.float64 if dtype == jnp.complex128 else dtype)
 
+def symmetrize(_a):
+    _a = jnp.tril(_a)
+    return _a + _a.T.conj() - jnp.diag(jnp.diag(_a))
+
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""

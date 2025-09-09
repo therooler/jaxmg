@@ -1,9 +1,10 @@
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 import subprocess
 from pathlib import Path
 
 # os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".60"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".80"
 
 import time
 import numpy as np
@@ -166,20 +167,21 @@ def plot_group(group, title, figpath):
 
 if __name__ == "__main__":
     if 1:
-        for T_A in [128, 256, 512, 1024, 2048, 4096]:
-            for N in [2**i for i in range(4, 18)]:
-                shard_size = N//ndev
-                try:
-                    validate_padding(calculate_padding(shard_size, T_A, ndev), ndev, shard_size, T_A)
-                except ValueError:
-                    print(f"Tiling error: T_A={T_A}")
-                    T_A_min, T_A_max = calculate_valid_T_A(shard_size, T_A, ndev, T_A_max=shard_size)
-                    if T_A_min>0:
-                        T_A = T_A_min
-                    else:
-                        T_A = T_A_max
-                    print(f"New T_A {T_A}")
-                data = main(N, T_A=T_A)
+        for T_A in [128, 256, 512, 1024, 2048]:
+            # for N in [2**i for i in range(4, 18)]:
+            #     print(f"N={N}, T_A={T_A}")
+            #     shard_size = N//ndev
+            #     try:
+            #         validate_padding(calculate_padding(shard_size, T_A, ndev), ndev, shard_size, T_A)
+            #     except ValueError:
+            #         print(f"Tiling error: N={N}, T_A={T_A}")
+            #         # T_A_min, T_A_max = calculate_valid_T_A(shard_size, T_A, ndev, T_A_max=shard_size)
+            #         # print(f"New T_A {T_A_max}")
+            #         continue
+            #     data = main(N, T_A=T_A)
+            if ndev==8:
+                data = main(2**17+2**16, T_A=512)
+
 
     root = Path(__file__).parent / "data_potrs"
     figpath = Path(__file__).parent / "figures"
