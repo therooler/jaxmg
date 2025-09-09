@@ -77,20 +77,26 @@ def main(N, T_A):
         make_diag = lambda: jax.device_put(
             jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
         )
+        
+    myfn = partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
 
-    times = []
-    for run in range(n_runs + 1):
+    @jax.jit
+    def run_once():
         A = make_diag()
         b = jax.device_put(
             jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
         )
-        b.block_until_ready()
-        A.block_until_ready()
+        b = myfn(A, b, T_A)
+        return b
+
+    times = []
+    for run in range(n_runs + 1):
+
         print("Data allocated")
         time.sleep(5)
         start = time.time()
         try:
-            out = potrs(A, b, T_A=T_A)
+            out = run_once()
             out.block_until_ready()
             end = time.time()
             if run > 0:  # skip jitted run
@@ -164,7 +170,7 @@ def plot_group(group, title, figpath):
 if __name__ == "__main__":
     if 1:
         for T_A in [128, 256, 512, 1024, 2048]:
-            for N in [2**i for i in range(4, 15+ndev)]:
+            for N in [2**i for i in range(4, 17)]:
                 data = main(N, T_A=T_A)
 
     root = Path(__file__).parent / "data_potrs"

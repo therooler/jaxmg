@@ -22,6 +22,8 @@ def get_mesh_and_spec_from_array(a: Array):
             "Array is not sharded with a NamedSharding, cannot extract mesh and spec."
         )
 
+def maybe_real_dtype_from_complex(dtype):
+    return jnp.float32 if dtype == jnp.complex64 else (jnp.float64 if dtype == jnp.complex128 else dtype)
 
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""
