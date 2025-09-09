@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax import Array
 from jax.sharding import PartitionSpec as P, Mesh
 
-from typing import Tuple
+from typing import Tuple, List
 from functools import partial
 
 from .cyclic_1d import _cyclic_1d
@@ -25,7 +25,7 @@ def potrs(
     b: Array,
     T_A: int,
     mesh: Mesh,
-    in_specs: Tuple[P],
+    in_specs: Tuple[P] | List[P],
     cyclic_1d: bool = False,
     return_status: bool = False,
 ):
@@ -69,6 +69,7 @@ def potrs(
     assert a.ndim == 2, "a must be a 2D array."
     assert b.ndim == 2, "b must be a 2D array."
 
+    assert isinstance(in_specs, (tuple, list)), f"expected `in_specs` to be a tuple or list of `PartitionSpec` objects, received {in_specs}"
     assert len(in_specs) == 2, f"expected two `in_specs`, received {in_specs}"
 
     spec_a, spec_b = in_specs

@@ -89,7 +89,7 @@ def syevd(
     """
 
     assert a.ndim == 2, "a must be a 2D array."
-    if isinstance(in_specs, tuple):
+    if isinstance(in_specs, (tuple, list)):
         assert len(in_specs) == 1, f"expected only one `in_specs`, received {in_specs}"
 
         (spec_a,) = in_specs
