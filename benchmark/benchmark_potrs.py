@@ -2,7 +2,9 @@ import os
 import subprocess
 from pathlib import Path
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".60"
+
 import time
 import numpy as np
 
@@ -15,6 +17,7 @@ from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 
 from jaxmg.potrs import potrs
+from jaxmg.cyclic_1d import calculate_valid_T_A, validate_padding, calculate_padding
 import re
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -91,20 +94,14 @@ def main(N, T_A):
 
     times = []
     for run in range(n_runs + 1):
-
         print("Data allocated")
-        time.sleep(5)
         start = time.time()
-        try:
-            out = run_once()
-            out.block_until_ready()
-            end = time.time()
-            if run > 0:  # skip jitted run
-                times.append(end - start)
-                print(f"Elapsed time {times[-1]} [s]")
-        except ValueError:
-            times.append(np.nan)
-            print(f"Tiling error")
+        out = run_once()
+        out.block_until_ready()
+        end = time.time()
+        if run > 0:  # skip jitted run
+            times.append(end - start)
+            print(f"Elapsed time {times[-1]} [s]")
 
     np.save(f"{save_path}/{file_name}", np.array(times))
     return np.array(times)
@@ -169,8 +166,19 @@ def plot_group(group, title, figpath):
 
 if __name__ == "__main__":
     if 1:
-        for T_A in [128, 256, 512, 1024, 2048]:
-            for N in [2**i for i in range(4, 17)]:
+        for T_A in [128, 256, 512, 1024, 2048, 4096]:
+            for N in [2**i for i in range(4, 18)]:
+                shard_size = N//ndev
+                try:
+                    validate_padding(calculate_padding(shard_size, T_A, ndev), ndev, shard_size, T_A)
+                except ValueError:
+                    print(f"Tiling error: T_A={T_A}")
+                    T_A_min, T_A_max = calculate_valid_T_A(shard_size, T_A, ndev, T_A_max=shard_size)
+                    if T_A_min>0:
+                        T_A = T_A_min
+                    else:
+                        T_A = T_A_max
+                    print(f"New T_A {T_A}")
                 data = main(N, T_A=T_A)
 
     root = Path(__file__).parent / "data_potrs"
