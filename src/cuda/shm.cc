@@ -9,7 +9,10 @@
 #include <fcntl.h>      
 #include <sys/mman.h>  
 #include <sys/types.h>  
-#include <unistd.h>     
+#include <unistd.h> 
+#include <barrier>    
+
+#include "jaxlib/gpu/vendor.h"
 
 
 int sharedMemoryCreate(const char *name, size_t sz, sharedMemoryInfo *info) {
@@ -123,8 +126,10 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
     return shm;
 }
 
-template double **get_shm_device_ptrs<double>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
 template float  **get_shm_device_ptrs<float >(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template double **get_shm_device_ptrs<double>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template gpuComplex **get_shm_device_ptrs<gpuComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template gpuDoubleComplex **get_shm_device_ptrs<gpuDoubleComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
 
 
 int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)

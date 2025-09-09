@@ -10,7 +10,7 @@ def random_psd(n, dtype, seed):
     """
     key = jax.random.key(seed)
     A = jax.random.normal(key, (n, n), dtype=dtype) / jnp.sqrt(n)
-    return A @ A.T + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
+    return A @ A.T.conj() + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
 
 
 def get_mesh_and_spec_from_array(a: Array):

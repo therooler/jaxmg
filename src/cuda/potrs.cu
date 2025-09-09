@@ -83,15 +83,19 @@ namespace jax
     {
         namespace ffi = ::xla::ffi;
 
-#define SOLVER_DISPATCH_IMPL(impl, ...)   \
-    switch (dataType)                     \
-    {                                     \
-    case ffi::F32:                        \
-        return impl<float>(__VA_ARGS__);  \
-    case ffi::F64:                        \
-        return impl<double>(__VA_ARGS__); \
-    default:                              \
-        break;                            \
+#define SOLVER_DISPATCH_IMPL(impl, ...)             \
+    switch (dataType)                               \
+    {                                               \
+    case ffi::F32:                                  \
+        return impl<float>(__VA_ARGS__);            \
+    case ffi::F64:                                  \
+        return impl<double>(__VA_ARGS__);           \
+    case ffi::C64:                                  \
+        return impl<gpuComplex>(__VA_ARGS__);       \
+    case ffi::C128:                                 \
+        return impl<gpuDoubleComplex>(__VA_ARGS__); \
+    default:                                        \
+        break;                                      \
     }
         template <typename data_type>
         ffi::Error PotrsMgImpl(int64_t N, int64_t NRHS, int64_t batch_a,
@@ -100,7 +104,7 @@ namespace jax
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            bool VERBOSE = false;                 // print matrices for debugging
+            // bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -142,16 +146,16 @@ namespace jax
 
             /* CUDA */
             cudaDataType compute_type = traits<data_type>::cuda_data_type; // Data type for computation
-            cudaLibMgMatrixDesc_t descrA; // CusolverMg matrix descriptors
+            cudaLibMgMatrixDesc_t descrA;                                  // CusolverMg matrix descriptors
             cudaLibMgMatrixDesc_t descrB;
             cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
             cudaLibMgGrid_t gridB;
             cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
             FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
-            int info = 0;                            // Info used by cusolverMg calls
-            cusolverStatus_t cusolver_status;        // Return status of cusolverMg calls
-            int cusolver_status_host;
+            int info = 0;                     // Info used by cusolverMg calls
+            cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
+            int32_t cusolver_status_host = 0;
             auto status_data = status->typed_data(); // Status returned by potrf
             int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
             int64_t lwork_potrs = 0;
@@ -181,13 +185,13 @@ namespace jax
                     deviceList[j] = j;
                     cudaDeviceProp prop;
                     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                    if (VERBOSE)
-                    {
-                        std::printf("\tThere are %d GPUs \n", nbGpus);
-                        std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
-                        std::printf("T_A: %d \n", T_A);
-                        std::printf("T_B: %d \n", T_B);
-                    }
+                    // if (VERBOSE)
+                    // {
+                    //     std::printf("\tThere are %d GPUs \n", nbGpus);
+                    //     std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
+                    //     std::printf("T_A: %d \n", T_A);
+                    //     std::printf("T_B: %d \n", T_B);
+                    // }
                 }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
@@ -214,25 +218,25 @@ namespace jax
                                                                     T_B,        /* number of columns in a tile */
                                                                     compute_type, gridB));
             }
-            if (VERBOSE)
-            {
-                std::printf("Step 3: Print data on host \n");
-                std::vector<data_type> A(batch_a * N, 0);
-                gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-                for (int i = 0; i < batch_a * N; i++)
-                {
-                    std::cout << A[i] << std::endl;
-                }
+            // if (VERBOSE)
+            // {
+            //     std::printf("Step 3: Print data on host \n");
+            //     std::vector<data_type> A(batch_a * N, 0);
+            //     gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
+            //     for (int i = 0; i < batch_a * N; i++)
+            //     {
+            //         std::cout << A[i] << std::endl;
+            //     }
 
-                std::vector<data_type> B(batch_a * NRHS, 0);
-                gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
+            //     std::vector<data_type> B(batch_a * NRHS, 0);
+            //     gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
 
-                std::printf("%d: A = matlab base-1\n", currentDevice);
+            //     std::printf("%d: A = matlab base-1\n", currentDevice);
 
-                print_matrix(N, batch_a, A.data(), N);
-                std::printf("%d: b = matlab base-1\n", currentDevice);
-                print_matrix(NRHS, batch_a, B.data(), NRHS);
-            }
+            //     print_matrix(N, batch_a, A.data(), N);
+            //     std::printf("%d: b = matlab base-1\n", currentDevice);
+            //     print_matrix(NRHS, batch_a, B.data(), NRHS);
+            // }
             // std::printf("Step 4: Allocate distributed matrices A and B \n");
 
             // int64_t nbytes_A = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_A, lda);
@@ -315,18 +319,11 @@ namespace jax
             if (currentDevice == 0)
             {
                 // std::printf("Step 10: Solve A*X = B by POTRF and POTRS \n");
-                cusolver_status = cusolverMgPotrf(
+                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, compute_type,
-                    reinterpret_cast<void **>(shmwork), *shmlwork, &info);
-
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
+                    reinterpret_cast<void **>(shmwork), *shmlwork, &info));
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
@@ -345,14 +342,12 @@ namespace jax
                                                   reinterpret_cast<void **>(shmwork), *shmlwork,
                                                   &info);
 
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = -static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                
+                cusolver_status_host = static_cast<int32_t>(cusolver_status); // Only return status for potrs
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    status_data, &cusolver_status_host, sizeof(int32_t), gpuMemcpyHostToDevice, stream));
 
                 /* check if parameters are valid */
                 if (0 > info)
@@ -412,12 +407,17 @@ namespace jax
                 return ffi::Error::InvalidArgument(
                     "The input and output to getrf must have the same element type");
             }
+            if (dataType != b.element_type())
+            {
+                return ffi::Error::InvalidArgument(
+                    "The input and output to getrf must have the same element type");
+            }
             FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "potrf"));
 
             SOLVER_DISPATCH_IMPL(PotrsMgImpl, N, NRHS, batch_a, stream, scratch, a, b, tile_size, out, status);
 
             return ffi::Error::InvalidArgument(absl::StrFormat(
-                "Unsupported data type%s for potrf", absl::FormatStreamed(dataType)));
+                "Unsupported data type%s for potrs", absl::FormatStreamed(dataType)));
         }
 
         XLA_FFI_DEFINE_HANDLER_SYMBOL(PotrsMgFFI, PotrsMgDispatch,

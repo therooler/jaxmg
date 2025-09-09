@@ -109,7 +109,7 @@ def potri(
                 _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
             )
         _a = jnp.tril(_a)
-        _a = _a + _a.T - jnp.diag(jnp.diag(_a))
+        _a = _a + _a.T.conj() - jnp.diag(jnp.diag(_a))
 
         return _a, status
 

@@ -83,15 +83,19 @@ namespace jax
     {
         namespace ffi = ::xla::ffi;
 
-#define SOLVER_DISPATCH_IMPL(impl, ...)   \
-    switch (dataType)                     \
-    {                                     \
-    case ffi::F32:                        \
-        return impl<float>(__VA_ARGS__);  \
-    case ffi::F64:                        \
-        return impl<double>(__VA_ARGS__); \
-    default:                              \
-        break;                            \
+#define SOLVER_DISPATCH_IMPL(impl, ...)             \
+    switch (dataType)                               \
+    {                                               \
+    case ffi::F32:                                  \
+        return impl<float>(__VA_ARGS__);            \
+    case ffi::F64:                                  \
+        return impl<double>(__VA_ARGS__);           \
+    case ffi::C64:                                  \
+        return impl<gpuComplex>(__VA_ARGS__);       \
+    case ffi::C128:                                 \
+        return impl<gpuDoubleComplex>(__VA_ARGS__); \
+    default:                                        \
+        break;                                      \
     }
         template <typename data_type>
         ffi::Error PotriMgImpl(int64_t N, int64_t batch_a,
@@ -100,7 +104,7 @@ namespace jax
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            bool VERBOSE = false;                 // print matrices for debugging
+            bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -135,7 +139,7 @@ namespace jax
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
             int info = 0;                     // Info used by cusolverMg calls
             cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
-            int cusolver_status_host;
+            int32_t cusolver_status_host;
             auto status_data = status->typed_data(); // Status returned by potri
             int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
             int64_t lwork_potri = 0;
@@ -187,19 +191,19 @@ namespace jax
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
             }
-            if (VERBOSE)
-            {
-                std::printf("Step 3: Print data on host \n");
-                std::vector<data_type> A(batch_a * N, 0);
-                gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-                for (int i = 0; i < batch_a * N; i++)
-                {
-                    std::cout << A[i] << std::endl;
-                }
+            // if (VERBOSE)
+            // {
+            //     std::printf("Step 3: Print data on host \n");
+            //     std::vector<data_type> A(batch_a * N, 0);
+            //     gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
+            //     for (int i = 0; i < batch_a * N; i++)
+            //     {
+            //         std::cout << A[i] << std::endl;
+            //     }
 
-                std::printf("%d: A = matlab base-1\n", currentDevice);
-                print_matrix(N, batch_a, A.data(), N);
-            }
+            //     std::printf("%d: A = matlab base-1\n", currentDevice);
+            //     print_matrix(N, batch_a, A.data(), N);
+            // }
 
             // std::printf("Step 8: Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
@@ -243,18 +247,11 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                cusolver_status = cusolverMgPotrf(
+                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, compute_type,
-                    reinterpret_cast<void **>(shmwork), *shmlwork, &info);
-
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
+                    reinterpret_cast<void **>(shmwork), *shmlwork, &info));
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
@@ -272,12 +269,11 @@ namespace jax
                                                   reinterpret_cast<void **>(shmwork), *shmlwork,
                                                   &info);
 
-                if (cusolver_status != CUSOLVER_STATUS_SUCCESS)
-                {
-                    cusolver_status_host = -static_cast<int>(cusolver_status);
-                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                        status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-                }
+                
+                cusolver_status_host = static_cast<int32_t>(cusolver_status);
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
+            
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
