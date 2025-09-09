@@ -1,33 +1,15 @@
-# Copyright 2024 The JAX Authors.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-"""An end-to-end example demonstrating the use of the JAX FFI with CUDA.
-
-The specifics of the kernels are not very important, but the general structure,
-and packaging of the extension are useful for testing.
-"""
-
 import os
 import ctypes
 import jax
-from typing import Tuple
-from functools import partial
+
 import jax.numpy as jnp
 from jax import Array
 from jax.sharding import PartitionSpec as P, Mesh
 
-from .utils import get_mesh_and_spec_from_array
-from .cyclic_1d import cyclic_1d_layout, _cyclic_1d
+from typing import Tuple
+from functools import partial
+
+from .cyclic_1d import _cyclic_1d
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotrs.so")
@@ -48,41 +30,47 @@ def potrs(
     return_status: bool = False,
 ):
     """
-    Compute the Cholesky decomposition of a symmetric matrix `a` and solve the linear system `a * x = b`.
-    This function uses the JAX FFI to call a CusolverMg CUDA kernel for the computation.
+    Solves the linear system `a * x = b` for `x` using the Cholesky decomposition of a symmetric positive-definite matrix `a`
+    on multiple GPUs via a distributed CUDA kernel through JAX FFI.
 
-    If `a` is not postive-definite, CusolverMg will fail and raise an error.
-    If `a` is not symmetric, CusolverMg will fail and raise an error.
+    This function calls a CusolverMg CUDA kernel to compute the solution.
+    The input matrix `a` must be 2D, symmetric, and positive-definite,
+    and the right-hand side `b` must be a 2D array with the same number of rows as `a`.
 
-    If `cyclic_1d` is set to True but the input arrays are not sharded in a cyclic 1d manner,
-    the data layout will be wrong and the kernel will fail since `a` will likely not be positve definite with the
-    given data layout.
+    The matrix `a` must be sharded along its columns using PartitionSpec P(None, str),
+    and `b` must be replicated across all devices using PartitionSpec P(None, None).
+    If `cyclic_1d` is True, the input arrays are assumed to be sharded in a cyclic 1D layout.
 
-    If the provided matrix is not positive definite, or correctly sharded (even though `cyclic_1d` is True),
-    the returned result will be NaN.
+    If `a` is not positive-definite or not symmetric, CusolverMg will fail and
+    return an error status. In both cases, the returned result will be NaN.
 
     Args:
-        a: A 2D array representing the matrix to be decomposed.
-        b: A 2D array representing the right-hand side of the linear system.
-        T_A: Tile size used for cyclic 1d layout. Only used if `cyclic_1d` is True.
-        cyclic_1d: If True, guarantees that the input arrays are sharded in a cyclic manner.
-                      If False, the arrays are expected to be sharded along the columns of `a` and replicated for `b`.
-        return_status: If True, returns a tuple (x, status) where `status` is an integer indicating the success or failure of the computation.
-            If status>0, the integer corresponds to the cusolverStatus_t returned by cusolverMgPotrf.
-            If status<0, the integer corresponds to the cusolverStatus_t returned by cusolverMgPotrs.
-            For CUDA Toolkit 12.8.0, the possible values can be found in `cusolver_common.h`.
+        a: 2D JAX array representing the matrix to decompose. Must be symmetric and positive-definite.
+        b: 2D JAX array representing the right-hand side of the linear system. Must have the same number of rows as `a`.
+        T_A: Tile size for cyclic 1D layout. Only used if `cyclic_1d` is True.
+        mesh: JAX Mesh object describing the device mesh.
+        in_specs: Tuple of PartitionSpec describing the sharding of `a` and `b`.
+        cyclic_1d: If True, input arrays are assumed to be sharded in a cyclic 1D manner.
+            If False, arrays are sharded along columns for `a` and replicated for `b`.
+        return_status: If True, returns a tuple (x, status), where `status` is an integer
+            indicating the success or failure of the computation. For CUDA Toolkit 12.8.0,
+            status codes are defined in `cusolver_common.h`.
 
     Returns:
-        The solution `x` as a 2D array, replicated across all devices. If `return_status` is True, also returns the `status` integer.
+        If `return_status` is False: The solution `x` as a 2D array, replicated across all devices.
+        If `return_status` is True: A tuple (x, status), where `status` is an integer status code from the CUDA kernel.
+
     Raises:
-        ValueError: If the input arrays do not have the correct shapes or sharding.
+        AssertionError: If `a` or `b` are not 2D, if their shapes do not match, or if `in_specs` is not of the correct length/type.
+        ValueError: If the input arrays do not have the correct sharding.
     """
 
     assert a.shape[0] == b.shape[0], "A and b must have the same number of rows."
     assert a.ndim == 2, "a must be a 2D array."
     assert b.ndim == 2, "b must be a 2D array."
 
-    assert len(in_specs)==2
+    assert len(in_specs) == 2, f"expected two `in_specs`, received {in_specs}"
+
     spec_a, spec_b = in_specs
     ndev = len(jax.devices("gpu"))
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):

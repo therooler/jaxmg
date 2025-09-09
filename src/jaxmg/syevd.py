@@ -58,39 +58,40 @@ def syevd(
     return_status: bool = False,
 ):
     """
-    Compute the inverse of a symmetric matrix `a`.
-    This function uses the JAX FFI to call a CusolverMg CUDA kernel for the computation.
+    Computes the eigenvalue decomposition of a symmetric matrix `a` using a distributed multi-GPU CUDA kernel via JAX FFI.
 
-    If `a` is not postive-definite, CusolverMg will fail and raise an error.
-    If `a` is not symmetric, CusolverMg will fail and raise an error.
+    This function calls a CusolverMg CUDA kernel to compute the eigenvalues (and optionally eigenvectors) of `a`.
+    The input matrix `a` must be 2D and symmetric. The matrix must be sharded along its columns using PartitionSpec P(None, str).
+    If `cyclic_1d` is True, the input is assumed to be sharded in a cyclic 1D layout.
 
-    If `cyclic_1d` is set to True but the input arrays are not sharded in a cyclic 1d manner,
-    the data layout will be wrong and the kernel will fail since `a` will likely not be positve definite with the
-    given data layout.
-
-    If the provided matrix is not positive definite, or correctly sharded (even though `cyclic_1d` is True),
-    the returned result will be NaN.
+    If `a` is not postive-definite, CusolverMg will fail and return an error status.
+    If `a` is not symmetric, CusolverMg will fail and return an error status.
+    In both cases, the returned result will be NaN.
 
     Args:
-        a: A 2D array representing the matrix to be decomposed.
-        T_A: Tile size used for cyclic 1d layout. Only used if `cyclic_1d` is True.
-        cyclic_1d: If True, guarantees that the input arrays are sharded in a cyclic 1d manner.
-                      If False, the arrays are expected to be sharded along the columns of `a` and replicated for `b`.
-        return_status: If True, returns a tuple (x, status) where `status` is an integer indicating the success or failure of the computation.
-            If status>0, the integer corresponds to the cusolverStatus_t returned by cusolverMgPotrf.
-            If status<0, the integer corresponds to the cusolverStatus_t returned by cusolverMgPotrs.
-            For CUDA Toolkit 12.8.0, the possible values can be found in `cusolver_common.h`.
+        a: 2D JAX array representing the matrix to decompose. Must be symmetric.
+        T_A: Tile size for cyclic 1D layout. Only used if `cyclic_1d` is True.
+        mesh: JAX Mesh object describing the device mesh.
+        in_specs: PartitionSpec or tuple of PartitionSpec describing the sharding of `a`.
+        return_eigenvectors: If True, also computes and returns the eigenvectors.
+        cyclic_1d: If True, input arrays are assumed to be sharded in a cyclic 1D manner. If False, arrays are sharded along columns.
+        return_status: If True, returns a tuple (..., status), where `status` is an integer indicating the success or failure of the computation.
+            For CUDA Toolkit 12.8.0, status codes are defined in `cusolver_common.h`.
 
     Returns:
-        The solution `A^{-1}` as a 2D array, sharded columnwise across all devices.
-        If `return_status` is True, also returns the `status` integer.
+        out = (eigenvalues, eigenvectors) if `return_eigenvalues` is True.
+        out = eigenvalues if `return_eigenvalues` is False.
+        Returns additional `status` if `return_status` is True.
+        
     Raises:
-        ValueError: If the input arrays do not have the correct shapes or sharding.
+        AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
+        ValueError: If the input array does not have the correct sharding or if T_A > 1024.
     """
 
     assert a.ndim == 2, "a must be a 2D array."
     if isinstance(in_specs, tuple):
-        assert len(in_specs) == 1
+        assert len(in_specs) == 1, f"expected only one `in_specs`, received {in_specs}"
+
         (spec_a,) = in_specs
     else:
         spec_a = in_specs
@@ -176,67 +177,3 @@ def syevd(
         else:
             out = eigenvalues
     return out
-
-    # @partial(
-    #     jax.shard_map,
-    #     mesh=mesh,
-    #     in_specs=in_specs,
-    #     out_specs=out_specs,
-    #     check_vma=False,
-    # )
-    # def impl(_a):
-    #     if not cyclic_1d and ndev > 1:
-    #         _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
-
-    #     if return_eigenvectors:
-    #         eigenvalues, _a, status = jax.ffi.ffi_call(
-    #             target_name,
-    #             out_type,
-    #             input_layouts=((1, 0),),
-    #             output_layouts=output_layouts,
-    #         )(_a, T_A=T_A)
-    #     else:
-    #         eigenvalues, status = jax.ffi.ffi_call(
-    #             target_name,
-    #             out_type,
-    #             input_layouts=((1, 0),),
-    #             output_layouts=output_layouts,
-    #         )(_a, T_A=T_A)
-
-    #     if not cyclic_1d and ndev > 1:
-    #         _a = _undo_cyclic_1d(
-    #             _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
-    #         )
-    #     if return_eigenvectors:
-    #         return eigenvalues, _a, status
-    #     else:
-    #         return eigenvalues, _a, status
-
-    #     return jax.jit(
-    #         lambda _a: jax.shard_map(
-    #             fn,
-    #             mesh=mesh_a,
-    #             in_specs=spec_a,
-    #             out_specs=out_specs,
-    #             check_vma=False,
-    #         )(_a)
-    #     )
-
-    # if not cyclic_1d and len(mesh_a.devices) > 1:
-    #     a = cyclic_1d_layout(a, T_A=T_A)
-    # if return_eigenvectors:
-    #     eigenvalues, V, status = jax.lax.platform_dependent(a, cuda=impl("syevd_mg"))
-    #     if not cyclic_1d and len(mesh_a.devices) > 1:
-    #         V = undo_cyclic_1d_layout(V, T_A)
-    #     if return_status:
-    #         out = (eigenvalues, V, status)
-    #     else:
-    #         out = (eigenvalues, V)
-    # else:
-    #     eigenvalues, status = jax.lax.platform_dependent(a, cuda=impl("syevd_no_V_mg"))
-    #     if return_status:
-    #         out = (eigenvalues, status)
-    #     else:
-    #         out = eigenvalues
-
-    # return out
