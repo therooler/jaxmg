@@ -344,10 +344,10 @@ namespace jax
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-                
+
                 cusolver_status_host = static_cast<int32_t>(cusolver_status); // Only return status for potrs
                 JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                    status_data, &cusolver_status_host, sizeof(int32_t), gpuMemcpyHostToDevice, stream));
+                    status_data, &cusolver_status_host, sizeof(cusolver_status), gpuMemcpyHostToDevice, stream));
 
                 /* check if parameters are valid */
                 if (0 > info)
@@ -405,12 +405,12 @@ namespace jax
             if (dataType != out->element_type())
             {
                 return ffi::Error::InvalidArgument(
-                    "The input and output to getrf must have the same element type");
+                    "The input and output to potrs must have the same element type");
             }
             if (dataType != b.element_type())
             {
                 return ffi::Error::InvalidArgument(
-                    "The input and output to getrf must have the same element type");
+                    "The input matrix a and output x of potrs must have the same element type");
             }
             FFI_RETURN_IF_ERROR(CheckShape(status->dimensions(), 1, "status", "potrf"));
 
