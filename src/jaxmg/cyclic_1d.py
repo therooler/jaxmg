@@ -12,6 +12,7 @@ from matplotlib.patches import Patch
 
 from .utils import get_mesh_and_spec_from_array
 
+
 def _cyclic_1d(x_block: Array, T_A: int, ndev: int, axis_name: str):
     """
     Convert a per-device column-sharded block of shape (N, shard_size) into a
@@ -263,18 +264,16 @@ def concat_chunk_gpus_right(
 def cyclic_1d_layout(a: Array, T_A: int):
     """Perform block cyclic relayout"""
     mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    return jax.jit(
-        jax.shard_map(
-            partial(
-                _cyclic_1d,
-                T_A=T_A,
-                ndev=len(mesh_a.devices),
-                axis_name=spec_a._partitions[1],
-            ),
-            mesh=mesh_a,
-            in_specs=spec_a,
-            out_specs=spec_a,
+    return jax.shard_map(
+        partial(
+            _cyclic_1d,
+            T_A=T_A,
+            ndev=len(mesh_a.devices),
+            axis_name=spec_a._partitions[1],
         ),
+        mesh=mesh_a,
+        in_specs=spec_a,
+        out_specs=spec_a,
     )(a)
 
 
@@ -348,13 +347,12 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     shard_size = N // ndev
     if shard_size < 1 or T_A < 1 or ndev < 1:
         raise ValueError("shard_size, T_A, and ndev must be positive integers.")
-    
+
     total_cols = ndev * shard_size
     # Before: device d owns columns [d*shard_size:(d+1)*shard_size)
-    
 
     # After: 1D block-cyclic by tiles; pad to multiple of T_A
-    
+
     pad = calculate_padding(shard_size, T_A, ndev)
     validate_padding(pad, ndev, shard_size, T_A)
     total_cols_padded = total_cols + pad * ndev
@@ -362,9 +360,11 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     # before = np.ones((N_rows, total_cols), dtype=int)
 
     for d in range(ndev):
-        before[:, d * (shard_size+pad) : d * (shard_size+pad) + shard_size] = d
+        before[:, d * (shard_size + pad) : d * (shard_size + pad) + shard_size] = d
 
-    after = np.full((N_rows, total_cols_padded), fill_value=ndev, dtype=int)  # 'ndev' = padding label
+    after = np.full(
+        (N_rows, total_cols_padded), fill_value=ndev, dtype=int
+    )  # 'ndev' = padding label
 
     # Assign device per T_A tile: tile k → device (k % ndev)
     n_tiles = total_cols_padded // T_A
@@ -381,21 +381,29 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     # ---- Plotting ----
     # Build a colormap: ndev distinct device colors + 1 gray for padding
     device_colors = plt.cm.tab20.colors  # plenty of distinct colors
-    colors = list(device_colors[:ndev]) + [(0.85, 0.85, 0.85, 1.0)]  # last entry for padding
+    colors = list(device_colors[:ndev]) + [
+        (0.85, 0.85, 0.85, 1.0)
+    ]  # last entry for padding
     cmap = ListedColormap(colors)
     bounds = list(range(ndev + 2))  # 0..ndev-1 device ids, ndev = padding
     norm = BoundaryNorm(bounds, cmap.N)
 
-    fig, axs = plt.subplots(2,1, figsize=(8, 6), constrained_layout=True)
+    fig, axs = plt.subplots(2, 1, figsize=(8, 6), constrained_layout=True)
 
-    im0 = axs[0].imshow(before, aspect='auto', interpolation='nearest', cmap=cmap, norm=norm)
-    axs[0].set_title(f"Column-block sharded (shard_size={shard_size}, required padding={pad})")
+    im0 = axs[0].imshow(
+        before, aspect="auto", interpolation="nearest", cmap=cmap, norm=norm
+    )
+    axs[0].set_title(
+        f"Column-block sharded (shard_size={shard_size}, required padding={pad})"
+    )
     axs[0].set_xlabel("Columns")
     axs[0].set_ylabel("Rows")
 
     # Grid lines for device boundaries in the block layout
     for d in range(1, ndev):
-        axs[0].axvline(d * (shard_size + pad) - 0.5, lw=1.2, ls='--', color='k', alpha=0.8)
+        axs[0].axvline(
+            d * (shard_size + pad) - 0.5, lw=1.2, ls="--", color="k", alpha=0.8
+        )
 
     # ---- Shared x-axis ticks every T_A ----
     max_cols = max(total_cols, total_cols_padded)
@@ -404,32 +412,36 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8):
     renderer = fig.canvas.get_renderer()
     bbox = axs[0].get_window_extent(renderer=renderer)
     x_axis_len = bbox.width
-    nticks = int(np.ceil(max_cols/T_A))
+    nticks = int(np.ceil(max_cols / T_A))
     # rough available space per tick
     space_per_tick = x_axis_len / nticks
     # heuristic: scale fontsize to ~70% of available space
     size = max(5, min(int(space_per_tick / 2), 12))
     for ax in axs:
-        ax.set_xticks(xticks -0.5)
+        ax.set_xticks(xticks - 0.5)
         ax.set_xticklabels(xticks, fontsize=size)
         ax.set_yticks([])
 
-    im1 = axs[1].imshow(after, aspect='auto', interpolation='nearest', cmap=cmap, norm=norm)
+    im1 = axs[1].imshow(
+        after, aspect="auto", interpolation="nearest", cmap=cmap, norm=norm
+    )
     axs[1].set_title(f"1D block-cyclic (tile size = {T_A})")
     axs[1].set_xlabel(r"Columns")
     axs[1].set_ylabel(r"Rows")
 
     # Grid lines for tile boundaries
     for t in range(1, n_tiles):
-        axs[1].axvline(t * T_A - 0.5, lw=0.8, ls=':', alpha=0.5)
+        axs[1].axvline(t * T_A - 0.5, lw=0.8, ls=":", alpha=0.5)
     # Vertical line separating real data from padding (if any)
     if pad:
-        axs[1].axvline(total_cols - 0.5, lw=1.2, ls='--', color='k', alpha=0.8)
+        axs[1].axvline(total_cols - 0.5, lw=1.2, ls="--", color="k", alpha=0.8)
 
     # Legend: one entry per device + padding
-    legend_handles = [Patch(facecolor=colors[d], edgecolor='k', label=f"GPU {d}") for d in range(ndev)]
-    legend_handles.append(Patch(facecolor=colors[-1], edgecolor='k', label="padding"))
-    axs[1].legend(handles=legend_handles, loc='upper right', frameon=True)
+    legend_handles = [
+        Patch(facecolor=colors[d], edgecolor="k", label=f"GPU {d}") for d in range(ndev)
+    ]
+    legend_handles.append(Patch(facecolor=colors[-1], edgecolor="k", label="padding"))
+    axs[1].legend(handles=legend_handles, loc="upper right", frameon=True)
     fig.suptitle(f"N={N}, ndev={ndev}\n")
 
     return fig, axs

@@ -19,17 +19,16 @@ and packaging of the extension are useful for testing.
 
 import os
 import ctypes
-from functools import partial
+
 import jax
-from typing import Tuple
 import jax.numpy as jnp
 from jax import Array
 from jax.sharding import PartitionSpec as P, Mesh
 
-from .utils import get_mesh_and_spec_from_array
+from functools import partial
+from typing import Tuple
+
 from .cyclic_1d import (
-    cyclic_1d_layout,
-    undo_cyclic_1d_layout,
     _cyclic_1d,
     _undo_cyclic_1d,
 )
@@ -82,7 +81,7 @@ def syevd(
         out = (eigenvalues, eigenvectors) if `return_eigenvalues` is True.
         out = eigenvalues if `return_eigenvalues` is False.
         Returns additional `status` if `return_status` is True.
-        
+
     Raises:
         AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
         ValueError: If the input array does not have the correct sharding or if T_A > 1024.
@@ -139,6 +138,7 @@ def syevd(
                     _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
                 )
             return _ev, _a, status
+
         eigenvalues, V, status = impl(a)
         if return_status:
             out = (eigenvalues, V, status)
@@ -171,9 +171,10 @@ def syevd(
                 output_layouts=output_layouts,
             )(_a, T_A=T_A)
             return _ev, status
+
         eigenvalues, status = impl(a)
         if return_status:
-            out = (eigenvalues,  status)
+            out = (eigenvalues, status)
         else:
             out = eigenvalues
     return out
