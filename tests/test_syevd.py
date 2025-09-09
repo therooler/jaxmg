@@ -172,6 +172,46 @@ if any("gpu" == d.platform for d in jax.devices()):
         print("Test only works for 1,2 and 4 GPUs")
         assert True
 
+    @pytest.fixture(scope="module")
+    def mesh():
+        devices = jax.devices("gpu")
+        if not devices:
+            pytest.skip("No GPU devices available")
+        ndev = len(devices)
+        return jax.make_mesh((ndev,), ("x",))
+
+    @pytest.mark.parametrize("bad_shape", [(3,), (3, 3, 3)])
+    def test_a_not_2d(mesh, bad_shape):
+        a = jnp.ones(bad_shape)
+        with pytest.raises(AssertionError, match="a must be a 2D array"):
+            syevd(a, 32, mesh, (P(None, "x"),))
+
+    def test_in_specs_wrong_length(mesh):
+        a = jnp.eye(4)
+        with pytest.raises(AssertionError, match="expected only one `in_specs`"):
+            syevd(a, 32, mesh, (P(None, "x"), P(None, "x")))
+
+    def test_spec_a_not_sharded_columns(mesh):
+        a = jnp.eye(4)
+        # PartitionSpec with both axes sharded or first axis sharded
+        bad_specs = [P("x", None), P("x", "x"), P(None, None)]
+        for spec in bad_specs:
+            with pytest.raises(ValueError, match="A must be sharded along the columns"):
+                syevd(a, 32, mesh, (spec,))
+
+    def test_T_A_too_large(mesh):
+        a = jnp.eye(4)
+        with pytest.raises(ValueError, match="T_A has a maximum value of 1024"):
+            syevd(a, 2048, mesh, (P(None, "x"),))
+
+    def test_correct_call(mesh):
+        N = 4
+        a = jnp.eye(N)
+        sharding = NamedSharding(mesh, P(None, "x"))
+        a = jax.device_put(a, sharding)
+        # Should not raise
+        out = syevd(a, 32, mesh, (P(None, "x"),))
+        assert isinstance(out, tuple)
 
 else:
 

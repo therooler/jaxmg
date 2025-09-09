@@ -1,21 +1,18 @@
 import sys
 import os
+import pytest
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(this_dir, "..")
-print(src_path)
 sys.path.append(src_path)
 import jax
-
 jax.config.update("jax_enable_x64", True)
-
 import jax.numpy as jnp
-from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-import pytest
 from jaxmg import potrs
 from jaxmg.utils import random_psd
 
+from functools import partial
 
 if any("gpu" == d.platform for d in jax.devices()):
     print("Running on GPU")
@@ -106,6 +103,87 @@ if any("gpu" == d.platform for d in jax.devices()):
     else:
         print("Test only works for 1,2 and 4 GPUs")
         assert True
+
+    def test_potrs_assert_shape_rows():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        b = jnp.ones((N+1, 1), dtype=dtype)
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+        b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+        with pytest.raises(AssertionError, match="A and b must have the same number of rows"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
+
+    def test_potrs_assert_a_2d():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.ones((N,), dtype=dtype)  # Not 2D
+        b = jnp.ones((N, 1), dtype=dtype)
+        A = jax.device_put(A, NamedSharding(mesh, P("x",)))
+        b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+        with pytest.raises(AssertionError, match="a must be a 2D array"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P("x",), P(None, None)))
+
+    def test_potrs_assert_b_2d():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        b = jnp.ones((N,), dtype=dtype)  # Not 2D
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+        b = jax.device_put(b, NamedSharding(mesh, P(None,)))
+        with pytest.raises(AssertionError, match="b must be a 2D array"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P(None, "x"), P(None,)))
+
+    def test_potrs_assert_in_specs_len():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        b = jnp.ones((N, 1), dtype=dtype)
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+        b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+        with pytest.raises(AssertionError, match="expected two `in_specs`"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P("x", None),))
+
+    def test_potrs_valueerror_spec_a():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        b = jnp.ones((N, 1), dtype=dtype)
+        # Wrong sharding: first axis sharded
+        A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+        b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+        with pytest.raises(ValueError, match="A must be sharded along the columns"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P("x", None), P(None, None)))
+
+    def test_potrs_valueerror_spec_b():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        b = jnp.ones((N, 1), dtype=dtype)
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+        # Wrong sharding for b
+        b = jax.device_put(b, NamedSharding(mesh, P("x", None)))
+        with pytest.raises(ValueError, match="b must be replicated along all shards"):
+            potrs(A, b, T_A, mesh=mesh, in_specs=(P(None, "x"), P("x", None)))
+
 else:
 
     def test_skip_gpu():

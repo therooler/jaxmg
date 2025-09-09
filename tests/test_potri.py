@@ -99,6 +99,40 @@ if any("gpu" == d.platform for d in jax.devices()):
         print("Test only works for 1,2 and 4 GPUs")
         assert True
 
+    def test_potri_assert_a_2d():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.ones((N,), dtype=dtype)  # Not 2D
+        A = jax.device_put(A, NamedSharding(mesh, P("x")))
+        with pytest.raises(AssertionError, match="a must be a 2D array"):
+            potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x"),))
+
+    def test_potri_assert_in_specs_len():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+        # Pass tuple of length 2
+        with pytest.raises(AssertionError, match="expected only one `in_specs`"):
+            potri(A, T_A=T_A, mesh=mesh, in_specs=(P(None, "x"), P(None, "x")))
+
+    def test_potri_valueerror_spec_a():
+        N = 4
+        T_A = 1
+        dtype = jnp.float32
+        devices = jax.devices()
+        mesh = jax.make_mesh((len(devices),), ("x",))
+        A = jnp.eye(N, dtype=dtype)
+        # Wrong sharding: first axis sharded
+        A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+        with pytest.raises(ValueError, match="must be sharded along the columns"):
+            potri(A, T_A=T_A, mesh=mesh, in_specs=(P("x", None),))
 
 else:
 
