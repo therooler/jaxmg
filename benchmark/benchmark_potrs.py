@@ -141,29 +141,62 @@ def collect_results(root: Path):
     return results
 
 
-def plot_group(group, title, figpath):
-    fig, ax = plt.subplots(figsize=(7, 5))
+def plot_group_T_A(results, figpath):
+    for (gpu, dtype, ndev), group in results.items():
+        title = f"{gpu}_{dtype}_ndev={ndev}"
+        fig, ax = plt.subplots(figsize=(7, 5))
 
-    for T_A, runs in sorted(group.items()):
-        Ns = sorted(runs.keys())
-        meds = [runs[N] for N in Ns]
-        ax.plot(Ns, meds, marker="o", label=f"T_A={T_A}")
+        for T_A, runs in sorted(group.items()):
+            Ns = sorted(runs.keys())
+            meds = [runs[N] for N in Ns]
+            ax.plot(Ns, meds, marker="o", label=f"T_A={T_A}")
 
-    try:
-        ax.set_xscale("log", base=2)
-    except TypeError:
-        ax.set_xscale("log", basex=2)
-    ax.set_yscale("log")
+        try:
+            ax.set_xscale("log", base=2)
+        except TypeError:
+            ax.set_xscale("log", basex=2)
+        ax.set_yscale("log")
 
-    ax.set_xlabel("N")
-    ax.set_ylabel("Median time [s]")
-    ax.set_title(title)
-    ax.grid(True, which="both", linestyle="--", alpha=0.3)
-    ax.legend()
-    fig.tight_layout()
-    fig.savefig(figpath / f"potrf_{title}.pdf", bbox_inches="tight")
-    plt.show()
+        ax.set_xlabel("N")
+        ax.set_ylabel("Median time [s]")
+        ax.set_title(title)
+        ax.grid(True, which="both", linestyle="--", alpha=0.3)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(figpath / f"T_A_potrf_{title}.pdf", bbox_inches="tight")
+        plt.show()
 
+def plot_group_ndev(group, figpath):
+    all_T_A = set()
+
+    # title = f"{gpu}_{dtype}_T_A={T_A}"
+    data_plot = {}
+    for (gpu, dtype, ndev), group in results.items():
+        for T_A, runs in sorted(group.items()):
+            sorted_runs = sorted(runs.items(), key=lambda x: x[0])
+            Ns = [k for k, v in sorted_runs]
+            meds = [v for k, v in sorted_runs]
+            data_plot.setdefault(T_A, {}).setdefault(ndev, (Ns, meds))
+    for T_A in data_plot.keys():
+        fig, ax = plt.subplots(figsize=(7, 5))
+        title = f"{gpu}_{dtype}_T_A={T_A}"
+        for ndev in data_plot[T_A].keys():
+            x,y = data_plot[T_A][ndev]
+            ax.plot(x,y, marker="o", label=f"ndev={ndev}")
+        try:
+            ax.set_xscale("log", base=2)
+        except TypeError:
+            ax.set_xscale("log", basex=2)
+        ax.set_yscale("log")
+
+        ax.set_xlabel("N")
+        ax.set_ylabel("Median time [s]")
+        ax.set_title(title)
+        ax.grid(True, which="both", linestyle="--", alpha=0.3)
+        ax.legend()
+        fig.tight_layout()
+        fig.savefig(figpath / f"ndev_potrf_{title}.pdf", bbox_inches="tight")
+        plt.show()
 
 if __name__ == "__main__":
     if 1:
@@ -189,6 +222,5 @@ if __name__ == "__main__":
     if not results:
         raise SystemExit("No .npy results found.")
 
-    for (gpu, dtype, ndev), group in results.items():
-        title = f"{gpu}_{dtype}_ndev={ndev}"
-        plot_group(group, title, figpath)
+    # plot_group_T_A(results, figpath)
+    plot_group_ndev(results, figpath)
