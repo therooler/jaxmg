@@ -116,7 +116,7 @@ def potri(
         return _a, status
 
     out, status = impl(a)
-    out = symmetrize(out)
+    out = symmetrize(out[:,:a.shape[0]])
     if return_status:
         return out, status[0]
     else:

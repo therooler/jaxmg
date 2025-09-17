@@ -20,7 +20,8 @@ and packaging of the extension are useful for testing.
 import os
 
 os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["JAX_TRACEBACK_FILTERING"] = "off"
+# os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".90"
+
 import ctypes
 import time
 import numpy as np
@@ -50,11 +51,11 @@ def random_psd(n, dtype, seed):
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**4  # - 2**12
+    N = 22000  # - 2**12
     print(N)
     NRHS = 1
-    T_A = 2
-    dtype = jnp.complex64
+    T_A = 1024
+    dtype = jnp.float64
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     ndev = len(devices)
@@ -64,24 +65,25 @@ def main():
         ("x",),
     )
 
-    _A = random_psd(N, dtype, seed=0)
-    # _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
-    eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
+    # _A = random_psd(N, dtype, seed=0)
+    _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
+    # eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
+    
     # print(V_expected)
-    print(eigenvalues_expected)
+    # print(eigenvalues_expected)
     A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
-
+    A.block_until_ready()
 
     with jnp.printoptions(linewidth=500):
-        eigenvalues, status = syevd(
+        eigenvalues, v, status = syevd(
             A,
             T_A=T_A,
             mesh=mesh,
             in_specs=(P(None, "x"),),
             return_status=True,
-            return_eigenvectors=False,
+            return_eigenvectors=True,
         )
-        print(eigenvalues)
+        print(eigenvalues.block_until_ready())
         # print("V")
         # print(V)
         # eigenvalus_VtAV = jnp.diag(V.T @ _A @ V)
@@ -143,10 +145,10 @@ def main3():
     print(f"Available devices: {ndev}")
 
     # PARAMETERS
-    N = 2**2
+    N = 16
     T_A = 256
     NRHS = 1
-    dtype = jnp.complex128
+    dtype = jnp.complex64
     # MESH
     shard_size = N // ndev
     mesh = jax.make_mesh((ndev,), ("x",))
@@ -206,4 +208,4 @@ def main3():
 
 
 if __name__ == "__main__":
-    main()
+    main3()

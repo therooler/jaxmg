@@ -1,10 +1,11 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import subprocess
 from pathlib import Path
 
-# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".80"
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".60"
 
 import time
 import numpy as np
@@ -18,7 +19,12 @@ from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 
 from jaxmg.potrs import potrs
-from jaxmg.cyclic_1d import calculate_valid_T_A, validate_padding, calculate_padding
+from jaxmg.cyclic_1d import (
+    calculate_valid_T_A,
+    validate_padding,
+    calculate_padding,
+    _cyclic_1d,
+)
 import re
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -27,8 +33,9 @@ dtype = jnp.float32
 devices = jax.devices("gpu")
 ndev = len(devices)
 
+
 def main(N, T_A):
-    
+
     print(f"Available devices: {ndev}")
     gpu_name = ""
     try:
@@ -43,7 +50,7 @@ def main(N, T_A):
     # PARAMETERS
     NRHS = 1
     n_runs = 10
-    save_path = f"{Path(__file__).parent}/data_potrs/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
+    save_path = f"{Path(__file__).parent}/data_potrs_cyclic/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     file_name = f"N_{N}_T_A_{T_A}"
@@ -81,8 +88,10 @@ def main(N, T_A):
         make_diag = lambda: jax.device_put(
             jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
         )
-        
-    myfn = partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)))
+
+    myfn = partial(
+        potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), cyclic_1d=True
+    )
 
     @jax.jit
     def run_once():
@@ -90,14 +99,30 @@ def main(N, T_A):
         b = jax.device_put(
             jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
         )
-        b = myfn(A, b, T_A)
-        return b
+        return A, b
 
+    cyclic_fn = jax.jit(
+        jax.shard_map(
+            partial(
+                _cyclic_1d,
+                T_A=T_A,
+                ndev=ndev,
+                axis_name="x",
+            ),
+            mesh=mesh,
+            in_specs=P(None, "x"),
+            out_specs=P(None, "x")
+        ), donate_argnums=0
+    )
     times = []
     for run in range(n_runs + 1):
         print("Data allocated")
+        A, b = run_once()
+        if ndev > 1:
+            A = cyclic_fn(A)
+        A.block_until_ready()
         start = time.time()
-        out = run_once()
+        out = myfn(A, b, T_A)
         out.block_until_ready()
         end = time.time()
         if run > 0:  # skip jitted run
@@ -110,7 +135,7 @@ def main(N, T_A):
 
 def collect_results(root: Path):
     """
-    Walks through root/data_potrs folders and returns a dict:
+    Walks through root/data_potrs_cyclic folders and returns a dict:
     results[(gpu, dtype, ndev)][T_A][N] = median_time
     """
     results = {}
@@ -159,12 +184,15 @@ def plot_group_T_A(results, figpath):
 
         ax.set_xlabel("N")
         ax.set_ylabel("Median time [s]")
+        ax.set_ylim([1e-2,1e2])
+        ax.set_ylabel("Median time [s]")
         ax.set_title(title)
         ax.grid(True, which="both", linestyle="--", alpha=0.3)
         ax.legend()
         fig.tight_layout()
         fig.savefig(figpath / f"T_A_potrf_{title}.pdf", bbox_inches="tight")
         plt.show()
+
 
 def plot_group_ndev(group, figpath):
     all_T_A = set()
@@ -181,8 +209,8 @@ def plot_group_ndev(group, figpath):
         fig, ax = plt.subplots(figsize=(7, 5))
         title = f"{gpu}_{dtype}_T_A={T_A}"
         for ndev in data_plot[T_A].keys():
-            x,y = data_plot[T_A][ndev]
-            ax.plot(x,y, marker="o", label=f"ndev={ndev}")
+            x, y = data_plot[T_A][ndev]
+            ax.plot(x, y, marker="o", label=f"ndev={ndev}")
         try:
             ax.set_xscale("log", base=2)
         except TypeError:
@@ -191,6 +219,7 @@ def plot_group_ndev(group, figpath):
 
         ax.set_xlabel("N")
         ax.set_ylabel("Median time [s]")
+        ax.set_ylim([1e-2, 1e2])
         ax.set_title(title)
         ax.grid(True, which="both", linestyle="--", alpha=0.3)
         ax.legend()
@@ -198,29 +227,33 @@ def plot_group_ndev(group, figpath):
         fig.savefig(figpath / f"ndev_potrf_{title}.pdf", bbox_inches="tight")
         plt.show()
 
+
 if __name__ == "__main__":
     if 1:
-        for T_A in [128, 256, 512, 1024, 2048]:
-            # for N in [2**i for i in range(4, 18)]:
-            #     print(f"N={N}, T_A={T_A}")
-            #     shard_size = N//ndev
-            #     try:
-            #         validate_padding(calculate_padding(shard_size, T_A, ndev), ndev, shard_size, T_A)
-            #     except ValueError:
-            #         print(f"Tiling error: N={N}, T_A={T_A}")
-            #         # T_A_min, T_A_max = calculate_valid_T_A(shard_size, T_A, ndev, T_A_max=shard_size)
-            #         # print(f"New T_A {T_A_max}")
-            #         continue
-            #     data = main(N, T_A=T_A)
-            if ndev==8:
-                data = main(2**17+2**16, T_A=512)
+        if ndev == 8:
+            extra_N = [
+                # 2**17 + 2**16,
+            ]
+        else:
+            extra_N = []
+        for N in [2**i for i in range(4, 18)] + extra_N:
+            for T_A in [128, 256, 512, 1024, 2048]:
+                print(f"N={N}, T_A={T_A}")
+                shard_size = N // ndev
+                try:
+                    validate_padding(
+                        calculate_padding(shard_size, T_A, ndev), ndev, shard_size, T_A
+                    )
+                except ValueError:
+                    print(f"Tiling error: N={N}, T_A={T_A}")
+                    continue
+                data = main(N, T_A=T_A)
 
-
-    root = Path(__file__).parent / "data_potrs"
-    figpath = Path(__file__).parent / "figures"
+    root = Path(__file__).parent / "data_potrs_cyclic"
+    figpath = Path(__file__).parent / "figures_cyclic"
     results = collect_results(root)
     if not results:
         raise SystemExit("No .npy results found.")
 
-    # plot_group_T_A(results, figpath)
+    plot_group_T_A(results, figpath)
     plot_group_ndev(results, figpath)

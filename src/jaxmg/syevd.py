@@ -145,9 +145,9 @@ def syevd(
 
         eigenvalues, V, status = impl(a)
         if return_status:
-            out = (eigenvalues, V, status)
+            out = (eigenvalues, V[:, :a.shape[0]], status)
         else:
-            out = (eigenvalues, V)
+            out = (eigenvalues, V[:, :a.shape[0]])
     else:
         target_name = "syevd_no_V_mg"
         out_type = (
