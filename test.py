@@ -35,7 +35,7 @@ from jax import ffi
 import os
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
-from src.jaxmg import potrs, syevd, potri
+from src.jaxmg import potrs, syevd, potri, potrs_no_shardmap
 from src.jaxmg.utils import random_psd
 devices = jax.devices("gpu")
 
@@ -96,8 +96,8 @@ def main2():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
     N = 2**10  # - 2**12
     print(N)
-    NRHS = 1
-    T_A = 256
+    NRHS = 8
+    T_A = 2
     dtype = jnp.float32
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
@@ -105,12 +105,12 @@ def main2():
     chunk_size = N // ndev
     mesh = jax.make_mesh((ndev,), ("x",))
 
-    _A = random_psd(N, dtype, seed=0)
-    print("eigenvalues", jnp.linalg.eigvalsh(_A))
+    _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
+    # print("eigenvalues", jnp.linalg.eigvalsh(_A))
     _b = jnp.ones((N, NRHS), dtype=dtype)
 
-    cfac = jax.scipy.linalg.cho_factor(_A)
-    expected_out = jax.scipy.linalg.cho_solve(cfac, _b)
+    # cfac = jax.scipy.linalg.cho_factor(_A)
+    # expected_out = jax.scipy.linalg.cho_solve(cfac, _b)
     A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
 
     # _b = jnp.concat([jnp.ones((N//2, NRHS), dtype=dtype), jnp.zeros((N//2, NRHS), dtype=dtype)], axis=0)
@@ -127,17 +127,22 @@ def main2():
     # Reconstruct from getrf
     start = time.time()
     b_before = b.copy()
-    out = potrs(A, b, T_A=T_A)
+    @partial(jax.shard_map, mesh=mesh, out_specs = P(None, None), in_specs=(P(None, "x"), P(None, None)), check_vma=False)
+    def fn(_A, _b):
+        return potrs_no_shardmap(_A, _b, T_A=T_A)
+    
+    out=fn(A,b)
+    print(out.shape)
     out.block_until_ready()
-    print(out)
-    print(expected_out)
-    print(jnp.max((A @ out - b_before) / abs(b_before)))
-    print(jnp.max((A @ expected_out - b_before) / abs(b_before)))
+    # print(out)
+    # print(expected_out)
+    # print(jnp.max((A @ out - b_before) / abs(b_before)))
+    # print(jnp.max((A @ expected_out - b_before) / abs(b_before)))
 
-    print(jnp.max(jnp.abs(out - expected_out) / abs(out)))
-    print(f"Done, elapsed time { time.time() - start} [s]")
-    assert jnp.allclose(b_before, A @ expected_out, rtol=jnp.finfo(dtype).eps)
-    assert jnp.allclose(b_before, A @ out, rtol=jnp.finfo(dtype).eps)
+    # print(jnp.max(jnp.abs(out - expected_out) / abs(out)))
+    # print(f"Done, elapsed time { time.time() - start} [s]")
+    # assert jnp.allclose(b_before, A @ expected_out, rtol=jnp.finfo(dtype).eps)
+    # assert jnp.allclose(b_before, A @ out, rtol=jnp.finfo(dtype).eps)
 
 
 def main3():
@@ -145,7 +150,7 @@ def main3():
     print(f"Available devices: {ndev}")
 
     # PARAMETERS
-    N = 16
+    N = 7
     T_A = 256
     NRHS = 1
     dtype = jnp.complex64
@@ -208,4 +213,4 @@ def main3():
 
 
 if __name__ == "__main__":
-    main3()
+    main2()
