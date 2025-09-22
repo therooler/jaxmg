@@ -143,7 +143,6 @@ def syevd(
                 _a = _undo_cyclic_1d(
                     _a, T_A=T_A, ndev=ndev, axis_name=axis_name
                 )
-            print(_ev)
             return _ev, _a, status
 
         eigenvalues, V, status = impl(a)
@@ -177,7 +176,6 @@ def syevd(
                 input_layouts=((1, 0),),
                 output_layouts=output_layouts,
             )(_a, T_A=T_A)
-            print(_ev)
             return _ev, status
 
         eigenvalues, status = impl(a)
