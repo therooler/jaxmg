@@ -96,7 +96,7 @@ def syevd(
     else:
         spec_a = in_specs
 
-    ndev = len(jax.devices("gpu"))
+    ndev = jax.local_device_count()
 
     axis_name = spec_a._partitions[1]
 

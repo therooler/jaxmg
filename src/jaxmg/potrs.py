@@ -73,7 +73,7 @@ def potrs(
     assert len(in_specs) == 2, f"expected two `in_specs`, received {in_specs}"
 
     spec_a, spec_b = in_specs
-    ndev = len(jax.devices("gpu"))
+    ndev = jax.local_device_count()
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
         raise ValueError(
             "A must be sharded along the columns with PartitionSpec P(None, str)."
@@ -158,7 +158,7 @@ def potrs_no_shardmap(
     assert a.ndim == 2, "a must be a 2D array."
     assert b.ndim == 2, "b must be a 2D array."
 
-    ndev = len(jax.devices("gpu"))
+    ndev = jax.local_device_count()
     input_layouts = (
         (1, 0),
         (1, 0),

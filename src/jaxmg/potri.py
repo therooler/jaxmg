@@ -75,7 +75,7 @@ def potri(
     else:
         spec_a = in_specs
 
-    ndev = len(jax.devices("gpu"))
+    ndev = jax.local_device_count()
     if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
         raise ValueError(
             "`a` must be sharded along the columns with PartitionSpec P(None, str)."

@@ -46,15 +46,14 @@ def random_psd(n, dtype, seed):
     """
     key = jax.random.key(seed)
     A = jax.random.normal(key, (n, n), dtype=dtype) / jnp.sqrt(n)
-    return A @ A.T.conj() + jnp.eye(n, dtype=dtype) * 1e-3  # symmetric PSD
+    return A @ A.T.conj() + jnp.eye(n, dtype=dtype) * 1e-6  # symmetric PSD
 
 
 def main():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 22000  # - 2**12
+    N = 16  # - 2**12
     print(N)
-    NRHS = 1
-    T_A = 1024
+    T_A = 256
     dtype = jnp.float64
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
@@ -65,15 +64,15 @@ def main():
         ("x",),
     )
 
-    # _A = random_psd(N, dtype, seed=0)
-    _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
-    # eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
+    _A = random_psd(N, dtype, seed=0)
+    # _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
+    eigenvalues_expected, V_expected = jnp.linalg.eigh(_A)
     
     # print(V_expected)
-    # print(eigenvalues_expected)
+    print(eigenvalues_expected)
     A = jax.device_put(_A, NamedSharding(mesh, P(None, "x")))
     A.block_until_ready()
-
+    print(A.sharding)
     with jnp.printoptions(linewidth=500):
         eigenvalues, v, status = syevd(
             A,
@@ -83,6 +82,7 @@ def main():
             return_status=True,
             return_eigenvectors=True,
         )
+        print(eigenvalues.sharding)
         print(eigenvalues.block_until_ready())
         # print("V")
         # print(V)
@@ -94,20 +94,23 @@ def main():
 
 def main2():
     # print(f"Getting FFI function from: {SHARED_LIBRARY}")
-    N = 2**10  # - 2**12
+    N = 6000  # - 2**12
     print(N)
-    NRHS = 8
-    T_A = 2
-    dtype = jnp.float32
+    NRHS = 1
+    T_A = 375
+    dtype = jnp.float64
     print(f"Memory alloc: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     ndev = len(devices)
     chunk_size = N // ndev
     mesh = jax.make_mesh((ndev,), ("x",))
-
-    _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
+    # _A = jnp.load("updates.npy")
+    _A = random_psd(N, dtype=dtype, seed=1230)
+    print(jnp.linalg.cond(_A))
+    # _A = jnp.diag(jnp.arange(1, N + 1, dtype=dtype))
     # print("eigenvalues", jnp.linalg.eigvalsh(_A))
-    _b = jnp.ones((N, NRHS), dtype=dtype)
+    # _b = jnp.ones((N, NRHS), dtype=dtype)
+    _b = jax.random.normal(shape=(N, NRHS), key=jax.random.key(1234), dtype=dtype)
 
     # cfac = jax.scipy.linalg.cho_factor(_A)
     # expected_out = jax.scipy.linalg.cho_solve(cfac, _b)
@@ -130,7 +133,6 @@ def main2():
     @partial(jax.shard_map, mesh=mesh, out_specs = P(None, None), in_specs=(P(None, "x"), P(None, None)), check_vma=False)
     def fn(_A, _b):
         return potrs_no_shardmap(_A, _b, T_A=T_A)
-    
     out=fn(A,b)
     print(out.shape)
     out.block_until_ready()
@@ -213,4 +215,4 @@ def main3():
 
 
 if __name__ == "__main__":
-    main2()
+    main()
