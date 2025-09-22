@@ -79,8 +79,8 @@ def syevd(
             For CUDA Toolkit 12.8.0, status codes are defined in `cusolver_common.h`.
 
     Returns:
-        out = (eigenvalues, eigenvectors) if `return_eigenvalues` is True.
-        out = eigenvalues if `return_eigenvalues` is False.
+        out = (eigenvalues, eigenvectors) if `return_eigenvectors` is True.
+        out = eigenvalues if `return_eigenvectors` is False.
         Returns additional `status` if `return_status` is True.
 
     Raises:
@@ -98,7 +98,9 @@ def syevd(
 
     ndev = len(jax.devices("gpu"))
 
-    if (spec_a._partitions[0] != None) or (spec_a._partitions[1] == None):
+    axis_name = spec_a._partitions[1]
+
+    if (spec_a._partitions[0] != None) or (axis_name == None):
         raise ValueError(
             "A must be sharded along the columns with PartitionSpec P(None, str)."
         )
@@ -116,7 +118,7 @@ def syevd(
             jax.ShapeDtypeStruct((a.shape[0], shard_size_needed), a.dtype),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
-        out_specs = (P(), spec_a, P(spec_a._partitions[1]))
+        out_specs = (P(), spec_a, P(axis_name))
         output_layouts = ((0,), (1, 0), (0,))
 
         @partial(
@@ -128,7 +130,7 @@ def syevd(
         )
         def impl(_a):
             if not cyclic_1d and ndev > 1:
-                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
 
             _ev, _a, status = jax.ffi.ffi_call(
                 target_name,
@@ -139,8 +141,9 @@ def syevd(
 
             if not cyclic_1d and ndev > 1:
                 _a = _undo_cyclic_1d(
-                    _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
+                    _a, T_A=T_A, ndev=ndev, axis_name=axis_name
                 )
+            print(_ev)
             return _ev, _a, status
 
         eigenvalues, V, status = impl(a)
@@ -154,7 +157,7 @@ def syevd(
             jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
-        out_specs = (P(), P(spec_a._partitions[1]))
+        out_specs = (P(), P(axis_name))
         output_layouts = ((0,), (0,))
 
         @partial(
@@ -166,7 +169,7 @@ def syevd(
         )
         def impl(_a):
             if not cyclic_1d and ndev > 1:
-                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
 
             _ev, status = jax.ffi.ffi_call(
                 target_name,
@@ -174,6 +177,7 @@ def syevd(
                 input_layouts=((1, 0),),
                 output_layouts=output_layouts,
             )(_a, T_A=T_A)
+            print(_ev)
             return _ev, status
 
         eigenvalues, status = impl(a)
