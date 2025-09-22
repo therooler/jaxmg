@@ -43,7 +43,7 @@ if any("gpu" == d.platform for d in jax.devices()):
     def warmup(x):
         return jax.lax.psum(x, "d")
 
-    if len(jax.local_device_count()) > 1:
+    if jax.local_device_count() > 1:
         warnings.warn(
             f"Multiple GPUs detected, initializing communication primitives...",
             JaxMgWarning,
