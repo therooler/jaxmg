@@ -122,7 +122,7 @@ def potrs_no_shardmap(
     a: Array,
     b: Array,
     T_A: int,
-    cyclic_1d=False,
+    cyclic_1d: bool = False,
     axis_name="x"
 ):
     """
@@ -168,6 +168,7 @@ def potrs_no_shardmap(
             jax.ShapeDtypeStruct(b.shape, b.dtype),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
+
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
             _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
