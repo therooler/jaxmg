@@ -62,6 +62,7 @@ from .cyclic_1d import (
     manual_cyclic_1d_layout,
     calculate_padding,
     calculate_valid_T_A,
+    calculate_all_valid_T_A,
 )
 
 __all__ = [
@@ -74,4 +75,5 @@ __all__ = [
     "manual_cyclic_1d_layout",
     "calculate_padding",
     "calculate_valid_T_A",
+    "calculate_all_valid_T_A"
 ]
