@@ -208,6 +208,16 @@ def calculate_valid_T_A(shard_size: int, T_A: int, ndev: int, T_A_max: int):
 
     return new_T_A_min, new_T_A_max
 
+def calculate_all_valid_T_A(shard_size: int, ndev: int, T_A_max: int):
+    suggested_T_A = []
+    new_T_A_min = 1
+    while new_T_A_min < T_A_max:
+        suggested_padding = calculate_padding(shard_size, new_T_A_min, ndev)
+        if (ndev - 1) * suggested_padding <= shard_size:
+            suggested_T_A.append(new_T_A_min)
+        new_T_A_min += 1
+
+    return suggested_T_A
 
 def get_chunk_gpu_zero(x_block: Array, padding: int, axis_name: str):
     N = x_block.shape[0]
