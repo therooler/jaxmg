@@ -1,6 +1,6 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 import subprocess
 from pathlib import Path
 
@@ -29,7 +29,7 @@ import re
 from pathlib import Path
 import matplotlib.pyplot as plt
 
-dtype = jnp.float32
+dtype = jnp.float64
 devices = jax.devices("gpu")
 ndev = len(devices)
 
@@ -89,9 +89,9 @@ def main(N, T_A):
             jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
         )
 
-    myfn = partial(
+    myfn = jax.jit(partial(
         potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), cyclic_1d=True
-    )
+    ), donate_argnums=1, static_argnums=2)
 
     @jax.jit
     def run_once():
