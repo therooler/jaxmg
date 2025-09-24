@@ -6,7 +6,10 @@ import  sys
 import  pathlib
 import jax
 
-@pytest.mark.skipif(len(jax.devices("gpu")) not in (1, 2),
+devices = [d for d in jax.devices() if d.platform == "gpu"]
+ndev = len(devices)
+
+@pytest.mark.skipif(ndev not in (1, 2),
                     reason="readme.py expects 1 or 2 GPUs")
 def test_readme_script():
     script = pathlib.Path(__file__).resolve().parents[1] / "examples" / "readme.py"
