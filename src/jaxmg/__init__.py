@@ -29,6 +29,7 @@ def _load(module, libraries):
                 ) from e
 
 
+_load("cuda", ["libcuda.so.1"])
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])
 
