@@ -29,7 +29,7 @@ def _load(module, libraries):
                 ) from e
 
 
-_load("cuda", ["libcuda.so.1"])
+# _load("cuda", ["libcuda.so.1"])
 _load("cusolver", ["libcusolver.so.11"])
 _load("cusolver", ["libcusolverMg.so.11"])
 
@@ -44,15 +44,17 @@ if any("gpu" == d.platform for d in jax.devices()):
     def warmup(x):
         return jax.lax.psum(x, "d")
 
-    if jax.local_device_count() > 1:
+    if jax.local_device_count() != jax.device_count():
         warnings.warn(
-            f"Multiple GPUs detected, initializing communication primitives...",
+            f"Multiple processes detected ({jax.local_device_count()} local devices, {jax.device_count()} total devices). \n"
+            "Ensure that jaxmg is only called over a local device mesh, otherwise process might hang...",
             JaxMgWarning,
             stacklevel=2,
         )
-        jax.block_until_ready(
-            warmup(jnp.ones((jax.local_device_count(),)))
-        )  # triggers NCCL setup
+        # if jax.local_device_count
+        # jax.block_until_ready(
+        #     warmup(jnp.ones((jax.local_device_count(),)))
+        # )  # triggers NCCL setup
 
 from .potrs import potrs, potrs_no_shardmap
 from .potri import potri
