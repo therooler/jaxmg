@@ -1,12 +1,12 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import subprocess
 from pathlib import Path
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".60"
-
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
+# os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 import time
 import numpy as np
 
@@ -60,6 +60,7 @@ def main(N, T_A):
     # INFO
     print(f"GPU name: {gpu_name}")
     print(f"N={N}, T_A={T_A}, dtype={dtype}")
+    print(jnp.dtype(dtype).itemsize)
     print(f"Memory allocated: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
 
     # MESH
@@ -85,21 +86,22 @@ def main(N, T_A):
             return local
 
     else:
-        make_diag = lambda: jax.device_put(
-            jnp.diag(np.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
+        make_diag = lambda: jax.lax.with_sharding_constraint(
+            jnp.diag(jnp.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P(None, "x"))
         )
 
     myfn = jax.jit(partial(
-        potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), cyclic_1d=True
-    ), donate_argnums=1, static_argnums=2)
+        potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), cyclic_1d=False
+    ), donate_argnums=0, static_argnums=2)
 
     @jax.jit
     def run_once():
         A = make_diag()
-        b = jax.device_put(
+        b = jax.lax.with_sharding_constraint(
             jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
         )
-        return A, b
+        out = myfn(A, b, T_A)
+        return out
 
     cyclic_fn = jax.jit(
         jax.shard_map(
@@ -117,13 +119,13 @@ def main(N, T_A):
     times = []
     for run in range(n_runs + 1):
         print("Data allocated")
-        A, b = run_once()
-        if ndev > 1:
-            A = cyclic_fn(A)
-        A.block_until_ready()
+        # if ndev > 1:
+        #     A = cyclic_fn(A)
+        # A.block_until_ready()
         start = time.time()
-        out = myfn(A, b, T_A)
+        out = run_once()
         out.block_until_ready()
+        # time.sleep(1)
         end = time.time()
         if run > 0:  # skip jitted run
             times.append(end - start)
@@ -232,12 +234,12 @@ if __name__ == "__main__":
     if 1:
         if ndev == 8:
             extra_N = [
-                # 2**17 + 2**16,
+                140000,
             ]
         else:
             extra_N = []
-        for N in [2**i for i in range(4, 18)] + extra_N:
-            for T_A in [128, 256, 512, 1024, 2048]:
+        for N in [2**i for i in range(4, 17)] + extra_N:
+            for T_A in [1250, ]:
                 print(f"N={N}, T_A={T_A}")
                 shard_size = N // ndev
                 try:
@@ -246,6 +248,7 @@ if __name__ == "__main__":
                     )
                 except ValueError:
                     print(f"Tiling error: N={N}, T_A={T_A}")
+                    print(calculate_valid_T_A(shard_size, T_A, ndev, shard_size))
                     continue
                 data = main(N, T_A=T_A)
 
