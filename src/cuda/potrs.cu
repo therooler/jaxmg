@@ -275,7 +275,7 @@ namespace jax
             if (currentDevice == 0)
             {
                 // std::cout << "memcpyH2D b" << std::endl;
-                memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, NRHS,
+                memcpyShard<data_type>(nbGpus, N, NRHS,
                                              /* input */
                                              array_data_b, ldb,
                                              /* output */
