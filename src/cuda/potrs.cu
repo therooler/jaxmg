@@ -362,14 +362,22 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Copy solution vector B \n");
-
+            // Write solution to all shmBs
             if (currentDevice == 0)
             {
-                // std::printf("Step 12: Free resources \n");
-                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                    out_data, shmB[0], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+                for (int dev = 1; dev < nbGpus; dev++)
+                {
+                    JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(
+                        shmB[dev], shmB[0], b.size_bytes(), gpuMemcpyDeviceToDevice));
+                }
+            }
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            // Collect solutions
+            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
 
+            if (currentDevice == 0)
+            {                
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrA));
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrB));
 
