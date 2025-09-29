@@ -272,8 +272,8 @@ namespace jax
                                          array_data_A /* device pointer for shard on device */
             );
             shmA[currentDevice] = array_data_A;
-            if (currentDevice == 0)
-            {
+            // if (currentDevice == 0)
+            // {
                 // std::cout << "memcpyH2D b" << std::endl;
                 memcpyShard<data_type>(nbGpus, N, NRHS,
                                              /* input */
@@ -285,7 +285,7 @@ namespace jax
                                              array_data_b /* device pointer for shard on device */
                 );
                 shmB[currentDevice] = array_data_b;
-            }
+            // }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
