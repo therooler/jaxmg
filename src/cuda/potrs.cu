@@ -372,6 +372,7 @@ namespace jax
             // Collect solutions
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
                     out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
             if (currentDevice == 0)
             {                

@@ -103,13 +103,13 @@ def potrs(
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
             _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
-        _b, status = jax.ffi.ffi_call(
+        _out, status = jax.ffi.ffi_call(
             "potrs_mg",
             out_type,
             input_layouts=input_layouts,
             output_layouts=output_layouts,
         )(_a, _b, T_A=T_A)
-        return _b, status
+        return _out, status
 
     out, status = impl(a, b)
     if return_status:
