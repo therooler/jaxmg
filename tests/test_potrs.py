@@ -60,6 +60,24 @@ def cusolver_solve_psd(N, T_A, dtype):
     norm_potrf = jnp.linalg.norm(b - A @ out)
     assert jnp.isclose(norm_scipy, norm_potrf, rtol=10, atol=0.0)
 
+def cusolver_solve_psd_sol_copy(N, T_A, dtype):
+    A = random_psd(N, dtype=dtype, seed=1234)
+    b = jnp.ones((N, 1), dtype=dtype)
+    cfac = jax.scipy.linalg.cho_factor(A)
+    expected_out = jax.scipy.linalg.cho_solve(cfac, b)
+    ndev = len(devices)
+    # Make mesh and place data
+    mesh = jax.make_mesh((ndev,), ("x",))
+    _A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+
+    out = jax.jit(
+        partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None))),
+        static_argnums=2,
+    )(_A, _b, T_A)
+    for shard in out.addressable_shards:
+        print(shard.data)
+
 devices = jax.devices()
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
@@ -97,6 +115,14 @@ def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
     if ndev != 2:
         pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_psd(N, T_A, dtype)
+
+@pytest.mark.parametrize("dtype", (jnp.float32,))
+@pytest.mark.parametrize("T_A", (8,))
+@pytest.mark.parametrize("N", (4,))
+def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_psd_sol_copy(N, T_A, dtype)
 
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))

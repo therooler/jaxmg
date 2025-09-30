@@ -127,7 +127,6 @@ static void memcpyShard(int num_devices,
                               int ldb,
                               /* output */
                               int N_A,                 /* number of columns of global A */
-                              int T_A,                 /* number of columns per column tile */
                               int LLD_A,               /* leading dimension of local A */
                               T_ELEM *array_d_A_packed /* device pointer array of dimension num_devices */
 )
@@ -151,7 +150,7 @@ static void memcpyShard(int num_devices,
                                 h_A, /* src */
                                 static_cast<size_t>(ldb) * sizeof(T_ELEM),
                                 static_cast<size_t>(M) * sizeof(T_ELEM),
-                                static_cast<size_t>(T_A),
+                                static_cast<size_t>(N_batch),
                                 cudaMemcpyDeviceToDevice));
 
     CUDA_CHECK(cudaDeviceSynchronize());

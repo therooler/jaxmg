@@ -274,13 +274,12 @@ namespace jax
             shmA[currentDevice] = array_data_A;
             // asign B on every device, even though solution will only be on device 0
             memcpyShard<data_type>(nbGpus, N, NRHS,
-                                            /* input */
-                                            array_data_b, ldb,
-                                            /* output */
-                                            1,           /* number of columns of global A */
-                                            T_B,         /* number of columns per column tile */
-                                            ldb,         /* leading dimension of local A */
-                                            array_data_b /* device pointer for shard on device */
+                                   /* input */
+                                   array_data_b, ldb,
+                                   /* output */
+                                   1,           /* number of columns of global A */
+                                   ldb,         /* leading dimension of local A */
+                                   array_data_b /* device pointer for shard on device */
             );
             shmB[currentDevice] = array_data_b;
 
@@ -371,11 +370,11 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             // Collect solutions
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                    out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+                out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
             if (currentDevice == 0)
-            {                
+            {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrA));
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrB));
 
