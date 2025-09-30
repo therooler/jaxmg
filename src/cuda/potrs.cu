@@ -357,7 +357,6 @@ namespace jax
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-
             // Write solution to all shmBs
             if (currentDevice == 0)
             {
@@ -368,9 +367,11 @@ namespace jax
                 }
             }
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
             // Collect solutions
-            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(
+                out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice));
+           
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
             if (currentDevice == 0)

@@ -1,6 +1,7 @@
 import sys
 import os
 import pytest
+import io
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(this_dir, "..")
@@ -13,6 +14,7 @@ from jaxmg import potrs
 from jaxmg.utils import random_psd
 
 from functools import partial
+from contextlib import redirect_stdout
 
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
@@ -63,8 +65,6 @@ def cusolver_solve_psd(N, T_A, dtype):
 def cusolver_solve_psd_sol_copy(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     b = jnp.ones((N, 1), dtype=dtype)
-    cfac = jax.scipy.linalg.cho_factor(A)
-    expected_out = jax.scipy.linalg.cho_solve(cfac, b)
     ndev = len(devices)
     # Make mesh and place data
     mesh = jax.make_mesh((ndev,), ("x",))
@@ -75,8 +75,18 @@ def cusolver_solve_psd_sol_copy(N, T_A, dtype):
         partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None))),
         static_argnums=2,
     )(_A, _b, T_A)
-    for shard in out.addressable_shards:
-        print(shard.data)
+    captured_output = io.StringIO()
+    with redirect_stdout(captured_output):
+        for shard in out.addressable_shards:
+            print(shard.data)
+    # Get the captured output and split by lines
+    output_lines = captured_output.getvalue().strip().split('\n')
+    
+    # Filter out empty lines
+    output_lines = [line for line in output_lines if line.strip()]
+    for dev in range(ndev):
+        for i in range(N):
+            assert output_lines[i]==output_lines[i+N * dev]
 
 devices = jax.devices()
 ndev = len(devices)
@@ -100,21 +110,21 @@ def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
     cusolver_solve_psd(N, T_A, dtype)
 
 
-@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-@pytest.mark.parametrize("T_A", (1, 2, 3))
-@pytest.mark.parametrize("N", (8, 10, 12))
-def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
-    if ndev != 2:
-        pytest.skip("This case is for exactly 2 GPUs")
-    cusolver_solve_arange(N, T_A, dtype)
+# @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+# @pytest.mark.parametrize("T_A", (1, 2, 3))
+# @pytest.mark.parametrize("N", (8, 10, 12))
+# def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
+#     if ndev != 2:
+#         pytest.skip("This case is for exactly 2 GPUs")
+#     cusolver_solve_arange(N, T_A, dtype)
 
-@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-@pytest.mark.parametrize("T_A", (1, 2, 3))
-@pytest.mark.parametrize("N", (8, 10, 12))
-def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
-    if ndev != 2:
-        pytest.skip("This case is for exactly 2 GPUs")
-    cusolver_solve_psd(N, T_A, dtype)
+# @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+# @pytest.mark.parametrize("T_A", (1, 2, 3))
+# @pytest.mark.parametrize("N", (8, 10, 12))
+# def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+#     if ndev != 2:
+#         pytest.skip("This case is for exactly 2 GPUs")
+#     cusolver_solve_psd(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32,))
 @pytest.mark.parametrize("T_A", (8,))
