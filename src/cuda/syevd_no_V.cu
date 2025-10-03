@@ -91,9 +91,9 @@ namespace jax
     case ffi::F64:                                  \
         return impl<double>(__VA_ARGS__);           \
     case ffi::C64:                                  \
-        return impl<gpuComplex>(__VA_ARGS__);       \
+        return impl<cuFloatComplex>(__VA_ARGS__);       \
     case ffi::C128:                                 \
-        return impl<gpuDoubleComplex>(__VA_ARGS__); \
+        return impl<cuDoubleComplex>(__VA_ARGS__); \
     default:                                        \
         break;                                      \
     }
@@ -158,7 +158,7 @@ namespace jax
 
             data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoA, "shmA"); // Actual shared memory
             data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
-            int64_t *shmlwork = (int64_t *)get_shm_lwork_ptr(currentDevice, sync_point, shminfolwork, "shmlwork");
+            int64_t *shmlwork = get_shm_lwork_ptr<int64_t>(currentDevice, sync_point, shminfolwork, "shmlwork");
 
             if (currentDevice == 0)
             {
@@ -232,13 +232,17 @@ namespace jax
                                                                     eigenvalue_type, compute_type,
                                                                     &lwork_syevd));
 
-                *shmlwork = lwork_syevd;
+                // *shmlwork = lwork_syevd;
+                for (int dev = 0; dev < nbGpus; dev++)
+                {
+                    shmlwork[dev] = lwork_syevd
+                }
             }
             sync_point.arrive_and_wait();
             // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
-            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (*shmlwork), "workspace_syevd"));
+            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork(currentDevice)), "workspace_syevd"));
             shmwork[currentDevice] = workspace;
 
             /* sync all devices */
