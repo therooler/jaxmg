@@ -209,7 +209,7 @@ namespace jax
             // }
 
             // std::printf("Step 8: Relayout data \n");
-            memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
+            memcpyCyclicShard<data_type>(nbGpus,stream, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
                                          /* output */

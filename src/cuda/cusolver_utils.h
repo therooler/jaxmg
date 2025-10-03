@@ -40,11 +40,10 @@
 #include <third_party/gpus/cuda/include/cuComplex.h>
 #include <third_party/gpus/cuda/include/cusolverDn.h>
 
-
 template <typename T_ELEM>
-static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> dimension num_devices */
-                              int M,                                 /* number of rows in local A, B */
-                              int N_batch,                           /* number of columns in local A, B */
+static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *deviceIdA, /* <int> dimension num_devices */
+                              int M,                                                     /* number of rows in local A, B */
+                              int N_batch,                                               /* number of columns in local A, B */
                               /* input */
                               const T_ELEM *h_B, /* device array, h_B is M-by-N_batch with leading dimension ldb  */
                               int ldb,
@@ -91,13 +90,14 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
         {
             break;
         }
-        CUDA_CHECK(cudaMemcpy2D(d_A, /* dst */
-                                static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
-                                h_A, /* src */
-                                static_cast<size_t>(ldb) * sizeof(T_ELEM),
-                                static_cast<size_t>(M) * sizeof(T_ELEM),
-                                static_cast<size_t>(T_A_clip),
-                                cudaMemcpyDeviceToDevice));
+        CUDA_CHECK(cudaMemcpy2DAsync(d_A, /* dst */
+                                     static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
+                                     h_A, /* src */
+                                     static_cast<size_t>(ldb) * sizeof(T_ELEM),
+                                     static_cast<size_t>(M) * sizeof(T_ELEM),
+                                     static_cast<size_t>(T_A_clip),
+                                     cudaMemcpyDeviceToDevice,
+                                     stream));
 
         // std::printf(" nbytes to copy: %d\n", static_cast<size_t>(M) * sizeof(T_ELEM) * static_cast<size_t>(T_A_clip));
         // std::vector<T_ELEM> data_block(static_cast<size_t>(LLD_A) * static_cast<size_t>(T_A_clip), 0);
@@ -119,16 +119,16 @@ static void memcpyCyclicShard(int num_devices, const int *deviceIdA, /* <int> di
 }
 
 template <typename T_ELEM>
-static void memcpyShard(int num_devices, 
-                              int M,                                 /* number of rows in local A, B */
-                              int N_batch,                           /* number of columns in local A, B */
-                              /* input */
-                              const T_ELEM *h_B, /* device array, h_B is M-by-N_batch with leading dimension ldb  */
-                              int ldb,
-                              /* output */
-                              int N_A,                 /* number of columns of global A */
-                              int LLD_A,               /* leading dimension of local A */
-                              T_ELEM *array_d_A_packed /* device pointer array of dimension num_devices */
+static void memcpyShard(int num_devices,
+                        int M,       /* number of rows in local A, B */
+                        int N_batch, /* number of columns in local A, B */
+                        /* input */
+                        const T_ELEM *h_B, /* device array, h_B is M-by-N_batch with leading dimension ldb  */
+                        int ldb,
+                        /* output */
+                        int N_A,                 /* number of columns of global A */
+                        int LLD_A,               /* leading dimension of local A */
+                        T_ELEM *array_d_A_packed /* device pointer array of dimension num_devices */
 )
 {
 
@@ -146,12 +146,12 @@ static void memcpyShard(int num_devices,
     T_ELEM *d_A = array_d_A_packed;
     const T_ELEM *h_A = h_B;
     CUDA_CHECK(cudaMemcpy2D(d_A, /* dst */
-                                static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
-                                h_A, /* src */
-                                static_cast<size_t>(ldb) * sizeof(T_ELEM),
-                                static_cast<size_t>(M) * sizeof(T_ELEM),
-                                static_cast<size_t>(N_batch),
-                                cudaMemcpyDeviceToDevice));
+                            static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
+                            h_A, /* src */
+                            static_cast<size_t>(ldb) * sizeof(T_ELEM),
+                            static_cast<size_t>(M) * sizeof(T_ELEM),
+                            static_cast<size_t>(N_batch),
+                            cudaMemcpyDeviceToDevice));
 
     CUDA_CHECK(cudaDeviceSynchronize());
 }

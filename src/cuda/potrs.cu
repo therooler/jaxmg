@@ -262,7 +262,7 @@ namespace jax
             // std::printf("Step 8: Relayout data \n");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             // std::printf("Relayout data \n");
-            memcpyCyclicShard<data_type>(nbGpus, deviceList.data(), N, batch_a,
+            memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
                                          /* output */
@@ -317,15 +317,24 @@ namespace jax
             if (currentDevice == 0)
             {
                 // std::printf("POTRF\n");
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
+                cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, compute_type,
-                    reinterpret_cast<void **>(shmwork), *shmlwork, &info));
+                    reinterpret_cast<void **>(shmwork), *shmlwork, &info);
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
+                cusolver_status_host = static_cast<int32_t>(cusolver_status);
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
+                    status_data, &cusolver_status_host, sizeof(cusolver_status), gpuMemcpyHostToDevice, stream));
+                if (cusolver_status_host != 0)
+                {
+                    CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                    sync_point.arrive_and_wait();
+                    return ffi::Error::Success();
+                }
                 /* check if A is singular */
                 if (0 > info)
                 {
@@ -343,7 +352,7 @@ namespace jax
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
-                cusolver_status_host = static_cast<int32_t>(cusolver_status); // Only return status for potrs
+                cusolver_status_host = static_cast<int32_t>(cusolver_status); // Return status for potrs
                 JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
                     status_data, &cusolver_status_host, sizeof(cusolver_status), gpuMemcpyHostToDevice, stream));
 
@@ -371,7 +380,7 @@ namespace jax
             // Collect solutions
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(
                 out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice));
-           
+
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
 
             if (currentDevice == 0)
