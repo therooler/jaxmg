@@ -2,13 +2,11 @@
 #ifndef SHM_MULTIPROCESS_H
 #define SHM_MULTIPROCESS_H
 
-
 #include <vector>
 #include <barrier>
 #include <memory>
 #include <cstddef>
 #include <cstdint>
-
 
 #define MAX_DEVICES 16
 
@@ -27,8 +25,8 @@ void sharedMemoryClose(sharedMemoryInfo *info);
 
 typedef struct shmStruct_st
 {
-    int64_t lwork = 0;              // Work buff
-    int devices[MAX_DEVICES];       // Participating device IDs
+    int64_t lwork = 0;                // Work buff
+    int devices[MAX_DEVICES];         // Participating device IDs
     double *device_ptrs[MAX_DEVICES]; // IPC memory handles
 } shmStruct;
 
@@ -45,6 +43,8 @@ public:
 // volatile shmStruct *get_shm_device_ptrs(int currentDevice, int nbGpus, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 template <typename T>
 T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
-int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+// int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+template <typename T>
+T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 
 #endif // SHM_MULTIPROCESS_H

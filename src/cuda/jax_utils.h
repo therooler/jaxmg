@@ -10,7 +10,6 @@
 #include "absl/status/statusor.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_format.h"
-
 // JAXlib
 #include "jaxlib/ffi_helpers.h"
 #include "jaxlib/gpu/vendor.h"

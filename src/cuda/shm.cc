@@ -13,6 +13,7 @@
 #include <barrier>    
 
 #include "jaxlib/gpu/vendor.h"
+#include <third_party/gpus/cuda/include/cuComplex.h>
 
 
 int sharedMemoryCreate(const char *name, size_t sz, sharedMemoryInfo *info) {
@@ -128,14 +129,13 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
 
 template float  **get_shm_device_ptrs<float >(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
 template double **get_shm_device_ptrs<double>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
-template gpuComplex **get_shm_device_ptrs<gpuComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
-template gpuDoubleComplex **get_shm_device_ptrs<gpuDoubleComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template cuFloatComplex **get_shm_device_ptrs<cuFloatComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template cuDoubleComplex **get_shm_device_ptrs<cuDoubleComplex>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
 
-
-int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
+template <typename T>
+T* get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
     // static const char shmName[] = "shmA";
-    int64_t shm = 0;
     pid_t pid = getppid();
     char pidString[20] = {0};
     char lshmName[40] = {0};
@@ -144,8 +144,8 @@ int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedM
     strcat(lshmName, shmName);
     strcat(lshmName, pidString);
 
-    size_t shmSize = sizeof(int64_t);
-
+    size_t shmSize = MAX_NUM_DEVICES*sizeof(T);
+    T* shm = nullptr;
     if (currentDevice == 0)
     {
         if (sharedMemoryCreate(lshmName, shmSize, &info) != 0)
@@ -153,8 +153,8 @@ int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedM
             printf("Failed to create shared memory\n");
             exit(EXIT_FAILURE); // You can later replace this with proper JAX error handling
         }
-        shm = (int64_t )info.addr;
-        memset((void *)shm, 0, shmSize);
+        shm = reinterpret_cast<T*>(info.addr);;
+        memset(shm, 0, shmSize);
         // printf("%d: Shared memory initialized\n", currentDevice);
     }
 
@@ -167,12 +167,15 @@ int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedM
             printf("Failed to open shared memory\n");
             exit(EXIT_FAILURE);
         }
-        shm = (int64_t )info.addr;
-        // printf("%d: Shared memory opened\n", currentDevice);
+        shm = reinterpret_cast<T*>(info.addr);
     }
 
     sync_point.arrive_and_wait();
     
     return shm;
 }
+
+template int64_t* get_shm_lwork_ptr<int64_t>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+template int32_t* get_shm_lwork_ptr<int32_t>(int, DynamicBarrier&, sharedMemoryInfo&, const char*);
+
 
