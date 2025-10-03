@@ -43,6 +43,44 @@ def cusolver_solve_arange(N, T_A, dtype):
     expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
     assert jnp.allclose(out.flatten(), expected_out)
 
+def cusolver_solve_non_psd(N, T_A, dtype):
+    A = jnp.diag(jnp.arange(N, dtype=dtype) - 1)
+    b = jnp.ones((N, 1), dtype=dtype)
+    ndev = len(devices)
+    # Make mesh and place data
+    mesh = jax.make_mesh((ndev,), ("x",))
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+
+    out, status= jax.jit(
+        partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), return_status=True),
+        static_argnums=2,
+    )(A, b, T_A)
+    status.block_until_ready()
+    out.block_until_ready()
+    assert status==7
+    assert jnp.all(jnp.isnan(out))
+
+def cusolver_solve_non_symm(N, T_A, dtype):
+    A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
+    #TODO: For some reason the solver does not fail when we set this to 1.0.
+    A = A.at[1,0].set(2.0)
+    b = jnp.ones((N, 1), dtype=dtype)
+    ndev = len(devices)
+    # Make mesh and place data
+    mesh = jax.make_mesh((ndev,), ("x",))
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+
+    out, status= jax.jit(
+        partial(potrs, mesh=mesh, in_specs=(P(None, "x"), P(None, None)), return_status=True),
+        static_argnums=2,
+    )(A, b, T_A)
+    status.block_until_ready()
+    out.block_until_ready()
+    assert status==7
+    assert jnp.all(jnp.isnan(out))
+
 def cusolver_solve_psd(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     b = jnp.ones((N, 1), dtype=dtype)
@@ -109,22 +147,37 @@ def test_cusolver_solve_psd_dev_1(N, T_A, dtype):
         pytest.skip("This case is for exactly 1 GPU")
     cusolver_solve_psd(N, T_A, dtype)
 
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_psd_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
+    cusolver_solve_non_psd(N, T_A, dtype)
 
-# @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-# @pytest.mark.parametrize("T_A", (1, 2, 3))
-# @pytest.mark.parametrize("N", (8, 10, 12))
-# def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
-#     if ndev != 2:
-#         pytest.skip("This case is for exactly 2 GPUs")
-#     cusolver_solve_arange(N, T_A, dtype)
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_symm_dev_1(N, T_A, dtype):
+    if ndev != 1:
+        pytest.skip("This case is for exactly 1 GPU")
+    cusolver_solve_non_symm(N, T_A, dtype)
 
-# @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
-# @pytest.mark.parametrize("T_A", (1, 2, 3))
-# @pytest.mark.parametrize("N", (8, 10, 12))
-# def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
-#     if ndev != 2:
-#         pytest.skip("This case is for exactly 2 GPUs")
-#     cusolver_solve_psd(N, T_A, dtype)
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (8, 10, 12))
+def test_cusolver_solve_arange_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_arange(N, T_A, dtype)
+
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (8, 10, 12))
+def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_psd(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32,))
 @pytest.mark.parametrize("T_A", (8,))
@@ -134,6 +187,21 @@ def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
         pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_psd_sol_copy(N, T_A, dtype)
 
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_psd_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPU")
+    cusolver_solve_non_psd(N, T_A, dtype)
+
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_symm_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPU")
+    cusolver_solve_non_symm(N, T_A, dtype)
 
 @pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
 @pytest.mark.parametrize("T_A", (1, 2, 4))
@@ -150,3 +218,19 @@ def test_cusolver_solve_psd_dev_4(N, T_A, dtype):
     if ndev != 4:
         pytest.skip("This case is for exactly 4 GPUs")
     cusolver_solve_psd(N, T_A, dtype)
+
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_psd_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
+    cusolver_solve_non_psd(N, T_A, dtype)
+
+@pytest.mark.parametrize("dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128))
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_non_symm_dev_4(N, T_A, dtype):
+    if ndev != 4:
+        pytest.skip("This case is for exactly 4 GPUs")
+    cusolver_solve_non_symm(N, T_A, dtype)
