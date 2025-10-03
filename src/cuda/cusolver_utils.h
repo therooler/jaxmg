@@ -172,7 +172,10 @@ struct traits<float>
 #if CUDART_VERSION >= 11000
     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_32F;
 #endif
-
+    static inline T nan()
+    {
+        return NAN;
+    }
     inline static S abs(T val) { return fabs(val); }
 
     template <typename RNG>
@@ -196,6 +199,10 @@ struct traits<double>
     static constexpr cusolverPrecType_t cusolver_precision_type = CUSOLVER_R_64F;
 #endif
 
+    static inline T nan()
+    {
+        return NAN;
+    }
     inline static S abs(T val) { return fabs(val); }
 
     template <typename RNG>
@@ -227,6 +234,11 @@ struct traits<cuFloatComplex>
         return make_cuFloatComplex((S)gen(), (S)gen());
     }
 
+    static inline T nan()
+    {
+        return make_cuFloatComplex(NAN, NAN);
+    }
+
     inline static T add(T a, T b) { return cuCaddf(a, b); }
     inline static T add(T a, S b) { return cuCaddf(a, make_cuFloatComplex(b, 0.f)); }
 
@@ -252,6 +264,11 @@ struct traits<cuDoubleComplex>
     inline static T rand(RNG &gen)
     {
         return make_cuDoubleComplex((S)gen(), (S)gen());
+    }
+
+    static inline T nan()
+    {
+        return make_cuDoubleComplex(NAN, NAN);
     }
 
     inline static T add(T a, T b) { return cuCadd(a, b); }
