@@ -337,6 +337,7 @@ namespace jax
                 sharedMemoryClose(&shminfoA);
                 sharedMemoryClose(&shminfowork);
                 sharedMemoryClose(&shminfolwork);
+                sharedMemoryClose(&shmcsh);
             }
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();

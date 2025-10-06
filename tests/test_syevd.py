@@ -12,7 +12,9 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
+
 from functools import partial
+
 from jaxmg import syevd
 from jaxmg.utils import random_psd
 
@@ -29,11 +31,8 @@ mesh = jax.make_mesh((ndev,), ("x",))
 def cusolver_solve_arange(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     eigenvalues_expected = jnp.diag(A)
-    ndev = len(devices)
     # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ("x",))
     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-
     eigenvalues, V = jax.jit(
         partial(syevd, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
     )(A, T_A=T_A)
@@ -45,11 +44,8 @@ def cusolver_solve_arange(N, T_A, dtype):
 def cusolver_solve_psd(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     eigenvalues_expected, V_expected = jnp.linalg.eigh(A)
-    ndev = len(devices)
     # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ("x",))
     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
-
     eigenvalues, V = jax.jit(
         partial(syevd, mesh=mesh, in_specs=(P(None, "x"),)), static_argnums=1
     )(A, T_A=T_A)
@@ -63,9 +59,7 @@ def cusolver_solve_psd(N, T_A, dtype):
 def cusolver_solve_arange_no_V(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     eigenvalues_expected = jnp.diag(A)
-    ndev = len(devices)
     # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ("x",))
     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
 
     eigenvalues = jax.jit(
@@ -78,9 +72,7 @@ def cusolver_solve_arange_no_V(N, T_A, dtype):
 def cusolver_solve_psd_no_V(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     eigenvalues_expected = jnp.linalg.eigvalsh(A)
-    ndev = len(devices)
     # Make mesh and place data
-    mesh = jax.make_mesh((ndev,), ("x",))
     A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
     eigenvalues = jax.jit(
         partial(syevd, mesh=mesh, in_specs=(P(None, "x"),), return_eigenvectors=False),
@@ -88,6 +80,34 @@ def cusolver_solve_psd_no_V(N, T_A, dtype):
     )(A, T_A=T_A)
 
     assert jnp.allclose(eigenvalues, eigenvalues_expected, rtol=10, atol=0.0)
+
+
+def cusolver_solve_psd_sol_copy(N, T_A, dtype):
+    A = random_psd(N, dtype=dtype, seed=1234)
+    # Make mesh and place data
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    out, V = jax.jit(
+        partial(syevd, mesh=mesh, in_specs=(P(None, "x"),), return_eigenvectors=True),
+        static_argnums=1,
+    )(A, T_A=T_A)
+    str_shards = []
+    for shard in out.addressable_shards:
+        str_shards.append(str(shard.data))
+    assert all(l == str_shards[0] for l in str_shards)
+
+
+def cusolver_solve_psd_sol_no_V_copy(N, T_A, dtype):
+    A = random_psd(N, dtype=dtype, seed=1234)
+    # Make mesh and place data
+    A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+    out = jax.jit(
+        partial(syevd, mesh=mesh, in_specs=(P(None, "x"),), return_eigenvectors=False),
+        static_argnums=1,
+    )(A, T_A=T_A)
+    str_shards = []
+    for shard in out.addressable_shards:
+        str_shards.append(str(shard.data))
+    assert all(l == str_shards[0] for l in str_shards)
 
 
 @pytest.mark.parametrize(
@@ -154,6 +174,28 @@ def test_cusolver_solve_psd_dev_2(N, T_A, dtype):
     if ndev != 2:
         pytest.skip("This case is for exactly 2 GPUs")
     cusolver_solve_psd(N, T_A, dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128)
+)
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_psd_sol_copy_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_psd_sol_copy(N, T_A, dtype)
+
+
+@pytest.mark.parametrize(
+    "dtype", (jnp.float32, jnp.float64, jnp.complex64, jnp.complex128)
+)
+@pytest.mark.parametrize("T_A", (1, 2, 3))
+@pytest.mark.parametrize("N", (4, 8, 10, 12))
+def test_cusolver_solve_psd_sol_no_V_copy_dev_2(N, T_A, dtype):
+    if ndev != 2:
+        pytest.skip("This case is for exactly 2 GPUs")
+    cusolver_solve_psd_sol_no_V_copy(N, T_A, dtype)
 
 
 @pytest.mark.parametrize(
