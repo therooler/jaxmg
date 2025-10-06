@@ -1,10 +1,14 @@
-# jaxmg: A distributed linear solver in JAX with cuSolverMg
+# JAXMg: A distributed linear solver in JAX with cuSolverMg
 
-This repository provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cusolvermg-api), NVIDIA’s distributed linear solver.  
+This repository provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api), NVIDIA’s multi-GPU linear solver.  
 
-To use cuSolverMg, matrices must be stored in **1D block-cyclic, column-major form**. This package handles that transformation on the JAX side with a single **all-to-all** call in combination with `jax.shard_map`.
+The python package `jaxmg` provides a jittable API for the following routines.
 
-<img src="resources/mat.png" alt="Matrix layout illustration" width="800">
+- `cusolverMgPotrs`: Solves the system of linear equations: $Ax=b$ where $A$ is an $N\times N$ symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.
+- `cusolverMgPotri`: Computes the inverse of an $N\times N$ symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.
+- `cusolverMgSyevd`: Computes eigenvalues and eigenvectors of an $N\times N$ symmetric (Hermitian) matrix.
+
+This README.md will focus on the `jaxmg.potrs` API, but we provide example for calling `jaxmg.potri` and `jaxmg.syevd` in the both the `/examples` and `/tests` folders.
 
 The provided binary is compiled with:
 - **GCC**: 11.5.0  
@@ -23,32 +27,102 @@ Clone the repository and install with:
 pip install .
 ```
 
-## Testing
-
 To verify the installation (requires at least one GPU):
 
 ```bash
 pytest 
 ```
+There are three types of tests:
 
-CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
+1. CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
+2. Single-GPU tests: A single GPU. 
+3. Multi-GPU tests: Requires multiple available GPUs.
 
-Multi-GPU tests: Requires multiple available GPUs.
+If there are not multiple GPUs availble we skip the tests that require multiple GPUs.
 
-## Simple example
+## Examples
+
+### Block-cyclic data layout
+
+To use cuSolverMg, matrices must be stored in **1D block-cyclic, column-major form**. The reason for this is to ensure that all devices participating in a specific routine can perform computations without being blocked by other parts of the computation (see Dongarra 1996). In `jaxmg`, we handles this transformation on the JAX side with a single **all-to-all** within a `jax.shard_map` context.
 
 Consider the case where we have 2 GPUs available and we are trying to solve the linear 
 system $A\cdot x =b$, where $A$ is an $12\times12$, positive-definite matrix and $b$ corresponds to a vector of ones. Every shard on each GPU will be of size $12\times 6$.
-We require a cyclic 1D tiling with tile size `T_A=2` for `cuSolverMg` to work. This 
-results in the following layout:
+We require a cyclic 1D tiling with tile size `T_A=2` for `cuSolverMg` to work:
 
 <img src="resources/mat_example.png" alt="Matrix layout illustration" width="800">
 
+
 In order to interweave the blocks, we need to ensure that each shard is a multiple of
-`ndev * T_A = 4`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all_to_all`. We therefore add zero padding of 2 columns to each shard (see top figure). After interweaving the blocks, we are left with extra padding on the right, which we ignore in the solver itself. After the solver is called, we again use a
+`ndev * T_A = 2`, so that we can reshape to `(ndev, T_A, ...)` and exchange the blocks via `jax.lax.all_to_all`. We therefore add zero padding of 2 columns to each shard (see top figure). After interweaving the blocks, we are left with extra padding on the right, which we ignore in the solver itself. After the solver is called, we again use a
 single `jax.lax.all_to_all` call to remap the data back to block-sharded form. 
 
-As we see in the code below, the interface is simple to use and does not require the user to deal with the cyclic 1d data remapping:
+We can achieve this layout in `jaxmg` with the following code:
+
+```python
+import jax
+
+jax.config.update("jax_enable_x64", True)
+import jax.numpy as jnp
+from jax.sharding import PartitionSpec as P, NamedSharding
+from jaxmg import cyclic_1d_layout
+
+# Assumes we have at least one GPU available
+devices = jax.devices("gpu")
+assert len(devices) in [1, 2], "Example only works for 1 or 2 devices"
+N = 12
+T_A = 2
+dtype = jnp.float32
+ndev = jax.device_count()
+# Create diagonal matrix and `b` all equal to one
+A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
+mesh = jax.make_mesh((ndev,), ("x",))
+A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+A_bc = cyclic_1d_layout(A, T_A)
+
+for shard in A_bc.addressable_shards:
+    print(f"dev {dev}: shard\n {shard.data}")
+```
+which prints
+```bash
+dev 0: shard
+ [ 0.  2.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  5.  0.  0.  0.]
+ [ 0.  0.  0.  6.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  9.  0.]
+ [ 0.  0.  0.  0.  0. 10.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]]
+dev 1: shard
+ [[ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 3.  0.  0.  0.  0.  0.]
+ [ 0.  4.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  7.  0.  0.  0.]
+ [ 0.  0.  0.  8.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0.  0.  0.]
+ [ 0.  0.  0.  0. 11.  0.]
+ [ 0.  0.  0.  0.  0. 12.]]
+```
+
+A more involved example is the case where we have 4 GPUS, `N=100` and we want a tiling of `T_A=4`. Now we need a padding of 7 on each GPU in order to perform data remappping:
+
+<img src="resources/mat.png" alt="Matrix layout illustration" width="800">
+
+- Dongarra, J.J., and D.W. Walker. *The Design of Linear Algebra Libraries for High Performance Computers.* Office of Scientific and Technical Information (OSTI), August 1, 1993. https://doi.org/10.2172/10184308.
+
+### A simple example: `jaxmg.potrs`
+
+In practice, the cyclic relayout is taken care of when you call any of the solvers in `jaxmg`. Here, we give an example of calling `jax.potrs`, which solves the linear system of equations $Ax=b$ for symmetrice, positive definite $A$ via a Cholesky decomposition.
+
+The interface of `jaxmg.potrs` is simple to use; one needs to supply to underlying mesh of the sharded data and specify the shardings:
 
 ```python
 # examples/readme.py
@@ -81,24 +155,173 @@ which should print
 ```bash
 True
 ```
+Note that we did not have to perform the cyclic relayout here since `jaxmg.potrs` calls `cyclic_1d_layout` before calling the solver.
 
-> **Note:** When multiple GPUs are available, we initialize the device communcation when `jaxmg` is imported, which can take a couple of seconds.
+> **Note:** If the user can ensure that the matrix `A` is already in block cyclic form, then `jaxmg.potrs` can be called with the argument `cyclic_1d=True` (`False` by default). If the data is not laid out correctly, then calling `jaxmg.potrs` will result in an array of `NaN`s and a nonzero status, indicating the failure of solver.
 
 
-## Current limitations
 
-The current version of `jaxmg` has the following limitations:
+### Calling the solver in a `jax.shard_map` context
 
-- **No Hermitian matrices:** We currently only have support for symmetric matrices. Complex numbers are supported on the cuSolverMg side, but would require some more development to deal with the XLA data strucutres jax provides.
+The `potrs` interface uses a call to `jax.shard_map` to relayout the data in 1D cyclic form and call the underlying cuSolverMg API. In practice, one may have a more complicated jitted function that manipulates shards in a shard_map context already, which 
+requires calling the solver within this function on individual shards.
 
-- **Potential invalid tilings:** It is possible that for a given $N\times N$ matrix the provided `T_A` does not allow one to use a single `jax.lax.all_to_all` call to bring the matrix to cyclic 1D form. In this case we raise an error, and suggest both a smaller and larger `T_A` that would enable the data remapping. This problem mostly occurs for small matrices, where the number of tiles is small and `T_A` is close to the shard size.
+To allow for this use case, we also provide an API that has to be called in a shard_map context. 
+Here, we rely on the user to correctly call `jax.shard_map`, passing the correct in and out shardings to their own function.
 
-- **Maximum tilings:** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrs` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` equals 1024.
+In the example below, we use this API for a trivial matrix, now with `complex64` data type, where we apply a diagonal shift to to the 
+matrix `A` before handing it to the solver:
 
-- **Maximum number of GPUs:** According to the cuSolverMg documentation, the current maximum number of GPUs is 16. Going beyond this value will raise a an error from within CUDA code.
+```python
+import jax
+jax.config.update("jax_enable_x64", True)
+import jax.numpy as jnp
+from jax.sharding import PartitionSpec as P, NamedSharding
+from jaxmg import potrs_no_shardmap
+from functools import partial
 
-- **No multi-node communcation:** We are currently restricted to a single node. However, as of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to also eventually support this. The only complication is that cuSolverMp requires the matrix to be sharded in cyclic 2D form.
+# Assumes we have at least one GPU available
+devices = jax.devices("gpu")
+assert len(devices) in [1, 2], "Example only works for 1 or 2 devices"
+N = 8
+T_A = 2
+dtype = jnp.complex64
+# Create diagonal matrix and `b` all equal to one
+A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
+b = jnp.ones((N, 1), dtype=dtype)
+ndev = len(devices)
+# Make mesh and place data (columns sharded)
+mesh = jax.make_mesh((ndev,), ("x",))
+A = jax.device_put(A, NamedSharding(mesh, P(None, "x")))
+b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+diag_shift = 1e-1
 
+@partial(jax.jit, static_argnames=("_T_A",))
+def shift_and_solve(_a, _b, _ds, _T_A):
+    idx = jnp.arange(_a.shape[0])
+    shard_size = _a.shape[1]
+    # Add shift based on index.
+    _a = _a.at[idx + shard_size * jax.lax.axis_index("x"), idx].add(_ds)
+    jax.debug.print("dev{}:_a=\n{}\n", jax.lax.axis_index("x"), _a)
+    # Call solver in shard_map context
+    return potrs_no_shardmap(_a, _b, _T_A)
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potrs(_a, _b, _ds, _T_A):
+    out = jax.shard_map(
+        partial(shift_and_solve, _T_A=_T_A),
+        mesh=mesh,
+        in_specs=(P(None, "x"), P(None, None), P()),
+        out_specs=(P(None, None), P(None)),
+        check_vma=False
+    )(_a, _b, _ds)
+    return out
+out, status = jitted_potrs(A, b, diag_shift, T_A)
+print(f"Status: {status}")
+expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1 + diag_shift)
+print(jnp.allclose(out.flatten(), expected_out))
+```
+for two devices, this will print
+```bash
+dev0:_a=
+[[1.1+0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 2.1+0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 3.1+0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 4.1+0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]]
+
+dev1:_a=
+[[0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 0. +0.j]
+ [5.1+0.j 0. +0.j 0. +0.j 0. +0.j]
+ [0. +0.j 6.1+0.j 0. +0.j 0. +0.j]
+ [0. +0.j 0. +0.j 7.1+0.j 0. +0.j]
+ [0. +0.j 0. +0.j 0. +0.j 8.1+0.j]]
+
+Status: [0]
+True
+```
+
+> **Note:** `potrs_no_shardmap` always returns a status.
+
+> **Note:** Jax will complain about replication errors if you do not pass `check_vma=True`. This is likely because it cannot infer the output sharding from the ffi call.
+
+### Multi-process support
+
+`jaxmg` supports multi-process `jax.distributed` environments but cuSolverMg **can only run on a single node**. There are some technical reasons for this (see below).
+
+The solver can only run on a single node, limiting the total number of GPUs that can used in practice. There are some technical reasons for this that have to do with how the JAX-XLA calls interact with cuSolverMg and how device pointers are being shared across CUDA contexts through JAX' Foreign Function Interface (FFI). 
+
+## Sharp bits
+
+
+- **Potential invalid tilings:** It is possible that for a given $N\times N$ matrix the provided `T_A` does not allow one to use a single `jax.lax.all_to_all` call to bring the matrix to cyclic 1D form. In this case we raise an error, and suggest both a smaller and larger `T_A` that would enable the data remapping. This problem mostly occurs for small matrices, where the number of tiles is small and `T_A` is close to the shard size. To calculate all available tilings, we provide a function `jaxmg.calculate_all_valid_T_A` that will return all possible valid tilings.
+
+- **Maximum tilings:** If the tiling `T_A` is too small, the solver can slow down significantly. In the cuSolverMg documentation, the recommended value for `T_A` is "256 or above". There is no maximum value of `T_A` for `jaxmg.potrs` and `jaxmg.potri`. However, for the symmetric eigensolver `jaxmg.syevd`, the maximum value of `T_A` is 1024.
+
+- **Maximum number of GPUs:** According to the cuSolverMg documentation, the current maximum number of GPUs is hardcoded to be 16. Going beyond this value will raise a an error from within CUDA code.
+
+## Technical details of multi-process limitations
+
+When `potrs.cu` is called in a `jax.shard_map` context through the `jax.ffi` API, 
+
+```python
+_out, status = jax.ffi.ffi_call(
+            "potrs_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+        )(_a, _b, T_A=T_A)
+```
+
+a thread will spawn for each available GPU that executes the code in `potrs.cu`. Each thread will only have access to its local shard in GPU memory through a device pointer. The `cuSolverMgPotrf` API must be called in a single thread and requires an array of **all** device pointers containing the shards on each GPU. 
+
+This raises the following two issues.
+
+1. We need to synchronise the threads to set up `cuSolverMgPotrf` and the data. We then need to execute the solver in thread 0 and have the other threads wait for it to finish. However, JAX has spawned the threads and we do not have any explict control over the thread  syncronization.
+2. Since each thread only has access to its local shard, we need to somehow make thread 0 aware of the device pointers across all other threads.
+
+We solver the first issue by initializing a global barrier via `std::unique_ptr<std::barrier<>> barrier_ptr`. Here `std::unique_ptr` takes care of deleting the barrier when it goes out of scope (when the FFI call finishes). Then, in `potrs.cu` we use 
+```C++
+static std::once_flag barrier_initialized;
+std::call_once(barrier_initialized, [&](){ sync_point.initialize(nbGpus); });
+```
+to initialize the barrier across all threads. The `std::once_flag` ensures that the barrier is initialized exactly once so that all threads see the same barrier.
+
+In a multi-process context this mechanism could probably be replaced by MPI calls where we syncronise across processes. 
+
+The real problem is point 2. Right now, we share device pointers between threads through the creation of shared memory:
+
+```C++
+data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice,sync_point, shminfoA, "shmA"); 
+```
+
+In each thread, we then assign the device pointer of the local shard to this shared memory:
+
+```C++
+shmA[currentDevice] = array_data_A;
+```
+
+which we can safely pass to `cuSolverMgPotrf`:
+```C++
+cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N,NRHS, 
+                                  reinterpret_cast<void **>(shmA), IA, JA, descrA,
+                                  reinterpret_cast<void **>(shmB), IB, JB, descrB,
+                                  compute_type,
+                                  reinterpret_cast<void **>(shmwork), *shmlwork,
+                                  &info);
+```
+
+In a multi-process context it is not as straightforward to setup memory sharing between processes especially when it comes to passing around device pointers which are bound to a specific CUDA context. The long-term solution will probably involve device pointer management through CUDAs Interprocess Communication API but this will likely be a significant development effort.
+
+
+### cuSolverMp
+As of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to eventually switch to this API. This will require sharding data into a cyclic 2D form and handling the solver orchestration with MPI, which will force the user to use one process per GPU.
 
 ## Development
 
@@ -123,7 +346,7 @@ cmake --install .
 ```
 
 
-## Citation
+## Citations
 (Citation details will be available soon.)
 
 ## Acknowledgements
