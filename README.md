@@ -8,7 +8,7 @@ The python package `jaxmg` provides a jittable API for the following routines.
 - `cusolverMgPotri`: Computes the inverse of an $N\times N$ symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.
 - `cusolverMgSyevd`: Computes eigenvalues and eigenvectors of an $N\times N$ symmetric (Hermitian) matrix.
 
-This README.md will focus on the `jaxmg.potrs` API, but we provide example for calling `jaxmg.potri` and `jaxmg.syevd` in the both the `/examples` and `/tests` folders.
+This README.md will focus on the `jaxmg.potrs` API, but we provide examples for calling `jaxmg.potri` and `jaxmg.syevd` in the both the `/examples` and `/tests` folders.
 
 The provided binary is compiled with:
 - **GCC**: 11.5.0  
@@ -112,7 +112,7 @@ dev 1: shard
  [ 0.  0.  0.  0.  0. 12.]]
 ```
 
-A more involved example is the case where we have 4 GPUS, `N=100` and we want a tiling of `T_A=4`. Now we need a padding of 7 on each GPU in order to perform data remappping:
+A more involved example is the case where we have 4 GPUS, `N=100` and we want a tiling of `T_A=4`. Now we need a padding of 7 on each GPU in order to perform data remappping (produced with above code):
 
 <img src="resources/mat.png" alt="Matrix layout illustration" width="800">
 
@@ -120,9 +120,9 @@ A more involved example is the case where we have 4 GPUS, `N=100` and we want a 
 
 ### A simple example: `jaxmg.potrs`
 
-In practice, the cyclic relayout is taken care of when you call any of the solvers in `jaxmg`. Here, we give an example of calling `jax.potrs`, which solves the linear system of equations $Ax=b$ for symmetrice, positive definite $A$ via a Cholesky decomposition.
+In practice, the cyclic relayout is taken care of when you call any of the solvers in `jaxmg`. Here, we give an example of calling `jax.potrs`, which solves the linear system of equations $Ax=b$ for symmetric, positive-definite $A$ via a Cholesky decomposition.
 
-The interface of `jaxmg.potrs` is simple to use; one needs to supply to underlying mesh of the sharded data and specify the shardings:
+The interface of `jaxmg.potrs` is simple to use; one needs to supply to underlying mesh of the sharded data and specify the input shardings:
 
 ```python
 # examples/readme.py
@@ -253,9 +253,224 @@ True
 
 ### Multi-process support
 
-`jaxmg` supports multi-process `jax.distributed` environments but cuSolverMg **can only run on a single node**. There are some technical reasons for this (see below).
+`jaxmg` supports multi-process `jax.distributed` environments but cuSolverMg **can only run in a single process**. There are some technical reasons for this (see below) that will hopefully be resolved in a future release.
 
-The solver can only run on a single node, limiting the total number of GPUs that can used in practice. There are some technical reasons for this that have to do with how the JAX-XLA calls interact with cuSolverMg and how device pointers are being shared across CUDA contexts through JAX' Foreign Function Interface (FFI). 
+To circumvent this limitation, one can perform a computation over all global devices, replicate the results over all host by gathering the data and calling the solver only on the process-local devices. 
+
+Here we provide an example of using `jaxmg` in a context where we have 2 nodes, each with 4 GPUs.
+In order to use the solver, we will have to gather the results onto each node by making use of a 2D `Mesh`. To illustrate the data layout, we will simply work with CPUs which allows us to run this code on a local machine.
+
+
+```python
+# Call ./examples/multi_process.sh to launch this code!
+import os
+import sys
+
+proc_id = int(sys.argv[1])
+num_procs = int(sys.argv[2])
+
+# initialize the distributed system
+import jax
+
+jax.config.update("jax_platform_name", "cpu")
+jax.distributed.initialize("localhost:6000", num_procs, proc_id)
+
+from jax.sharding import Mesh, PartitionSpec as P, NamedSharding
+import jax.numpy as jnp
+import numpy as np
+
+
+def get_device_grid():
+    by_proc = {}
+    for d in jax.devices():
+        by_proc.setdefault(d.process_index, []).append(d)
+    hosts = sorted(by_proc)
+    return np.array(
+        [[by_proc[h][x] for x in range(jax.local_device_count())] for h in hosts]
+    )
+
+
+def create_2d_mesh():
+    dev_grid = get_device_grid()
+    return Mesh(dev_grid, ("x", "y"))
+
+
+def create_1d_mesh():
+    dev_grid = get_device_grid()
+    return Mesh(dev_grid.flatten(), ("y",))
+
+print(f"Rank {proc_id}")
+print(f"Local devices {jax.local_device_count()}")
+print(f"Global devices {jax.device_count()}")
+print(f"World size {num_procs}")
+print(f"Device grid\n {get_device_grid()}")
+```
+When we launch this code like this:
+```bash
+#!/bin/bash
+
+export JAX_NUM_CPU_DEVICES=4
+num_processes=2
+
+range=$(seq 0 $(($num_processes - 1)))
+
+for i in $range; do
+  python multi_process.py $i $num_processes > /tmp/multi_process_$i.out &
+done
+
+wait
+
+for i in $range; do
+  echo "=================== process $i output ==================="
+  cat /tmp/multi_process_$i.out
+  echo
+done
+```
+we see
+```
+=================== process 0 output ===================
+Rank 0
+Local devices 4
+Global devices 8
+World size 2
+Device grid
+ [[CpuDevice(id=0) CpuDevice(id=1) CpuDevice(id=2) CpuDevice(id=3)]
+ [CpuDevice(id=131072) CpuDevice(id=131073) CpuDevice(id=131074) CpuDevice(id=131075)]]
+ =================== process 1 output ===================
+Rank 1
+Local devices 4
+Global devices 8
+World size 2
+Device grid
+ [[CpuDevice(id=0) CpuDevice(id=1) CpuDevice(id=2) CpuDevice(id=3)]
+ [CpuDevice(id=131072) CpuDevice(id=131073) CpuDevice(id=131074) CpuDevice(id=131075)]]
+```
+We can then construct a matrix that has its columns sharded over all global devices, and gather the columns onto each host:
+
+```python
+mesh2d = create_2d_mesh()
+
+A = jax.device_put(
+    jnp.diag(jnp.arange(1, jax.device_count() + 1, dtype=jnp.float32)),
+    NamedSharding(mesh2d, P(None, ("x", "y"))),
+)
+
+for shard in A.addressable_shards:
+    print(f"shard\n {shard.data}")
+
+# Gather over the number of hosts
+A = jax.lax.with_sharding_constraint(A, NamedSharding(mesh2d, P(None, "y")))
+
+for shard in A.addressable_shards:
+    print(f"shard\n {shard.data}")
+```
+which prints
+```
+=================== process 0 output ===================
+Rank 0
+Local devices 4
+Global devices 8
+World size 2
+Device grid
+ [[CpuDevice(id=0) CpuDevice(id=1) CpuDevice(id=2) CpuDevice(id=3)]
+ [CpuDevice(id=131072) CpuDevice(id=131073) CpuDevice(id=131074)
+  CpuDevice(id=131075)]]
+shard
+ [[1.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]]
+...
+shard
+ [[0.]
+ [0.]
+ [0.]
+ [4.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]]
+shard
+ [[1. 0.]
+ [0. 2.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]]
+...
+shard
+ [[0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [7. 0.]
+ [0. 8.]]
+
+=================== process 1 output ===================
+...
+shard
+ [[0.]
+ [0.]
+ [0.]
+ [0.]
+ [5.]
+ [0.]
+ [0.]
+ [0.]]
+shard
+ ...
+shard
+ [[0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [0.]
+ [8.]]
+shard
+ [[1. 0.]
+ [0. 2.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]]
+...
+shard
+ [[0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [0. 0.]
+ [7. 0.]
+ [0. 8.]]
+```
+
+We went from a matrix that was column sharded over all 8 global devices, to a matrix that was column sharded over the 4 gpus in each process.
+
+In this host-replicated layout we can safely call `jaxmg.potrs` on the array with a 2D mesh (the code below only works if we are actually performing this computation with access to GPUs):
+
+```python
+from jaxmg import potrs
+out= potrs(
+    A,
+    jnp.ones((jax.device_count(), 1), dtype=jnp.float32),
+    T_A=256,
+    mesh=mesh2d,
+    in_specs=(P(None, "T"), P(None, None)),
+)
+```
 
 ## Sharp bits
 
@@ -317,7 +532,9 @@ cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N,NRHS,
                                   &info);
 ```
 
-In a multi-process context it is not as straightforward to setup memory sharing between processes especially when it comes to passing around device pointers which are bound to a specific CUDA context. The long-term solution will probably involve device pointer management through CUDAs Interprocess Communication API but this will likely be a significant development effort.
+In a multi-process context it is not as straightforward to setup memory sharing between processes, especially when it comes to passing around device pointers which are bound to a specific CUDA context. The long-term solution will probably involve device pointer management through CUDAs Interprocess Communication API but this will likely be a significant development effort (which I am unable to commit to at the moment). 
+
+> **Note:** If you've made it this far into the README.md and have experience or thoughts on this, please reach out!
 
 
 ### cuSolverMp
