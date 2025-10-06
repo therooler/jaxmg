@@ -104,7 +104,6 @@ namespace jax
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            // bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -180,29 +179,9 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                // std::printf("Step 1: Create Mg handle and select devices (thread 0 only)\n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
-                // for (int j = 0; j < nbGpus; j++)
-                // {
-                //     deviceList[j] = j;
-                //     cudaDeviceProp prop;
-                //     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                    // if (VERBOSE)
-                    // {
-                    //     std::printf("\tThere are %d GPUs \n", nbGpus);
-                    //     std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
-                    //     std::printf("T_A: %d \n", T_A);
-                    //     std::printf("T_B: %d \n", T_B);
-                    // }
-                // }
-
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
-
-                // std::printf("Step 2: Enable peer access \n");
-                // enablePeerAccess(nbGpus, deviceList.data());
-
-                // std::printf("Step 3: Create matrix descriptors for A and D \n");
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridA, 1, nbGpus, deviceList.data(), mapping));
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridB, 1, nbGpus, deviceList.data(), mapping));
@@ -221,50 +200,9 @@ namespace jax
                                                                     T_B,        /* number of columns in a tile */
                                                                     compute_type, gridB));
             }
-            // if (VERBOSE)
-            // {
-            //     std::printf("Step 3: Print data on host \n");
-            //     std::vector<data_type> A(batch_a * N, 0);
-            //     gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-            //     for (int i = 0; i < batch_a * N; i++)
-            //     {
-            //         std::cout << A[i] << std::endl;
-            //     }
-
-            //     std::vector<data_type> B(batch_a * NRHS, 0);
-            //     gpuMemcpy(B.data(), array_data_b, batch_a * NRHS * sizeof(data_type), gpuMemcpyDeviceToHost);
-
-            //     std::printf("%d: A = matlab base-1\n", currentDevice);
-
-            //     print_matrix(N, batch_a, A.data(), N);
-            //     std::printf("%d: b = matlab base-1\n", currentDevice);
-            //     print_matrix(NRHS, batch_a, B.data(), NRHS);
-            // }
-            // std::printf("Step 4: Allocate distributed matrices A and B \n");
-
-            // int64_t nbytes_A = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_A, lda);
-            // int64_t nbytes_B = getWorkspaceBytesT_A<data_type>(nbGpus, N, T_B, ldb);
-
-            /* A := 0 */
-
-            // FFI_ASSIGN_OR_RETURN(auto workspaceA, AllocateWorkspaceBytes<data_type>(scratch, nbytes_A, "workspaceA"));
-            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            // shmA[currentDevice] = workspaceA;
-            /* B := 0 */
-            // FFI_ASSIGN_OR_RETURN(auto workspaceB, AllocateWorkspaceBytes<data_type>(scratch, nbytes_B, "workspaceB"));
-            // CUDA_CHECK_OR_RETURN(cudaMemset(workspaceA, 0, nbytes_A));
-            // shmB[currentDevice] = workspaceB;
-            // CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            // sync_point.arrive_and_wait();
-            /*
-            The example has the NxN matrix in host memory and then distributes it in chunks over the GPUs
-            We have chunks of size NxBatch in device memory, and need to somehow move this to the expected layout
-            for PotRf.
-            */
-            // std::printf("Step 8: Relayout data \n");
+            
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-            // std::printf("Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
@@ -291,7 +229,6 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                // std::printf("Get buffersize \n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                                                                     //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
                                                                     reinterpret_cast<void **>(shmA), IA, /* base-1 */
@@ -344,7 +281,6 @@ namespace jax
                 // Check status, if 0, continue with Potrs
                 if (cusolver_status_host[0] == 0)
                 {
-                    // std::printf("POTRS\n");
                     cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N, NRHS, /* NRHS */
                                                       reinterpret_cast<void **>(shmA), IA, JA, descrA,
                                                       reinterpret_cast<void **>(shmB), IB, JB, descrB,
@@ -386,15 +322,12 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
             // Collect solutions, fill nans if solver failed
-            // std::printf("%d: cusolver status %d \n", currentDevice, cusolver_status_host[currentDevice]);
             if (cusolver_status_host[currentDevice] == 0)
             {
                 JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, shmB[currentDevice], b.size_bytes(), gpuMemcpyDeviceToDevice));
             }
             else
             {
-                // std::printf("%d: filling nans %d \n", currentDevice, cusolver_status_host[currentDevice]);
-                // fill_nan<data_type>(reinterpret_cast<data_type *>(out_data), b.size_bytes(), stream);
                 std::vector<typename traits<data_type>::T> host_nan(N * NRHS, traits<data_type>::nan());
                 JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, host_nan.data(), sizeof(data_type) * N * NRHS, gpuMemcpyHostToDevice));
             }
@@ -416,7 +349,6 @@ namespace jax
                 sharedMemoryClose(&shmcsh);
                 sharedMemoryClose(&shminfolwork);
             }
-            // std::printf("Waiting for devices to exit\n");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 

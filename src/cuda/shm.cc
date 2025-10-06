@@ -1,18 +1,18 @@
-
+// Own code
 #include "shm.h"        
-
+// C++
 #include <cerrno>       
 #include <cstdio>       
 #include <cstring>      
 #include <cstdlib>      
-
 #include <fcntl.h>      
 #include <sys/mman.h>  
 #include <sys/types.h>  
 #include <unistd.h> 
 #include <barrier>    
-
+// JAXlib
 #include "jaxlib/gpu/vendor.h"
+// CUDA
 #include <third_party/gpus/cuda/include/cuComplex.h>
 
 
@@ -85,7 +85,6 @@ void DynamicBarrier::arrive_and_wait()
 template <typename T>
 T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
-    // static const char shmName[] = "shmA";
     T **shm = nullptr;
     pid_t pid = getppid();
     char pidString[20] = {0};
@@ -102,11 +101,10 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
         if (sharedMemoryCreate(lshmName, shmSize, &info) != 0)
         {
             printf("Failed to create shared memory\n");
-            exit(EXIT_FAILURE); // You can later replace this with proper JAX error handling
+            exit(EXIT_FAILURE); // #TODO: replace this with proper JAX error handling
         }
         shm = (T **)info.addr;
         memset((void *)shm, 0, shmSize);
-        // printf("%d: Shared memory initialized\n", currentDevice);
     }
 
     sync_point.arrive_and_wait(); // Barrier sync
@@ -119,7 +117,6 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
             exit(EXIT_FAILURE);
         }
         shm = (T **)info.addr;
-        // printf("%d: Shared memory opened\n", currentDevice);
     }
 
     sync_point.arrive_and_wait();
@@ -135,7 +132,6 @@ template cuDoubleComplex **get_shm_device_ptrs<cuDoubleComplex>(int, DynamicBarr
 template <typename T>
 T* get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
-    // static const char shmName[] = "shmA";
     pid_t pid = getppid();
     char pidString[20] = {0};
     char lshmName[40] = {0};
@@ -151,11 +147,10 @@ T* get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemory
         if (sharedMemoryCreate(lshmName, shmSize, &info) != 0)
         {
             printf("Failed to create shared memory\n");
-            exit(EXIT_FAILURE); // You can later replace this with proper JAX error handling
+            exit(EXIT_FAILURE); // #TODO: Replace this with proper JAX error handling
         }
         shm = reinterpret_cast<T*>(info.addr);;
         memset(shm, 0, shmSize);
-        // printf("%d: Shared memory initialized\n", currentDevice);
     }
 
     sync_point.arrive_and_wait(); // Barrier sync

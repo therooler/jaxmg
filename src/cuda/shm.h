@@ -2,6 +2,7 @@
 #ifndef SHM_MULTIPROCESS_H
 #define SHM_MULTIPROCESS_H
 
+// C++
 #include <vector>
 #include <barrier>
 #include <memory>
@@ -40,10 +41,9 @@ public:
     void arrive_and_wait();
 };
 
-// volatile shmStruct *get_shm_device_ptrs(int currentDevice, int nbGpus, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 template <typename T>
 T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
-// int64_t get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+
 template <typename T>
 T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 

@@ -104,7 +104,6 @@ namespace jax
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            // bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -162,28 +161,9 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                // std::printf("Step 1: Create Mg handle and select devices (thread 0 only)\n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
-                // for (int j = 0; j < nbGpus; j++)
-                // {
-                //     deviceList[j] = j;
-                //     cudaDeviceProp prop;
-                //     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                // if (VERBOSE)
-                // {
-                //     std::printf("\tThere are %d GPUs \n", nbGpus);
-                //     std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
-                //     std::printf("T_A: %d \n", T_A);
-                // }
-                // }
-
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
-
-                // std::printf("Step 2: Enable peer access \n");
-                // enablePeerAccess(nbGpus, deviceList.data());
-
-                // std::printf("Step 3: Create matrix descriptors for A and D \n");
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridA, 1, nbGpus, deviceList.data(), mapping));
 
@@ -194,21 +174,7 @@ namespace jax
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
             }
-            // if (VERBOSE)
-            // {
-            //     std::printf("Step 3: Print data on host \n");
-            //     std::vector<data_type> A(batch_a * N, 0);
-            //     gpuMemcpy(A.data(), array_data_A, batch_a * N * sizeof(data_type), gpuMemcpyDeviceToHost);
-            //     for (int i = 0; i < batch_a * N; i++)
-            //     {
-            //         std::cout << A[i] << std::endl;
-            //     }
-
-            //     std::printf("%d: A = matlab base-1\n", currentDevice);
-            //     print_matrix(N, batch_a, A.data(), N);
-            // }
-
-            // std::printf("Step 8: Relayout data \n");
+           
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -226,7 +192,6 @@ namespace jax
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Step 9: Allocate workspace \n");
             if (currentDevice == 0)
             {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
@@ -238,7 +203,6 @@ namespace jax
                                                                     reinterpret_cast<void **>(shmA), IA, JA, descrA,
                                                                     compute_type,
                                                                     &lwork_potri));
-                // *shmlwork = std::max(lwork_potrf, lwork_potri);
                 for (int dev = 0; dev < nbGpus; dev++)
                 {
                     shmlwork[dev] = std::max(lwork_potrf, lwork_potri);
@@ -246,7 +210,6 @@ namespace jax
             }
             sync_point.arrive_and_wait();
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
             FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork[currentDevice]), "workspace_potrf"));
@@ -317,8 +280,6 @@ namespace jax
             }
             else
             {
-                // std::printf("%d: filling nans %d \n", currentDevice, cusolver_status_host[currentDevice]);
-                // fill_nan<data_type>(reinterpret_cast<data_type *>(out_data), b.size_bytes(), stream);
                 std::vector<typename traits<data_type>::T> host_nan(N * batch_a, traits<data_type>::nan());
                 JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, host_nan.data(), sizeof(data_type) * N * batch_a, gpuMemcpyHostToDevice));
             }
@@ -326,8 +287,6 @@ namespace jax
             sync_point.arrive_and_wait();
             if (currentDevice == 0)
             {
-                // std::printf("Step 12: Free resources \n");
-
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyMatrixDesc(descrA));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridA));
