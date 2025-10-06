@@ -13,7 +13,7 @@ from matplotlib.patches import Patch
 from .utils import get_mesh_and_spec_from_array
 
 
-def _cyclic_1d(x_block: Array, T_A: int, ndev: int, axis_name: str):
+def cyclic_1d_no_shardmap(x_block: Array, T_A: int, ndev: int, axis_name: str):
     """
     Convert a per-device column-sharded block of shape (N, shard_size) into a
     1D cyclic layout across `ndev` devices on `axis_name` with tileing `T_A`.
@@ -277,7 +277,7 @@ def cyclic_1d_layout(a: Array, T_A: int):
     mesh_a, spec_a = get_mesh_and_spec_from_array(a)
     return jax.shard_map(
         partial(
-            _cyclic_1d,
+            cyclic_1d_no_shardmap,
             T_A=T_A,
             ndev=len(mesh_a.devices),
             axis_name=spec_a._partitions[1],

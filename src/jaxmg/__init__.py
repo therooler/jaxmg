@@ -60,6 +60,7 @@ from .potrs import potrs, potrs_no_shardmap
 from .potri import potri
 from .syevd import syevd
 from .cyclic_1d import (
+    cyclic_1d_no_shardmap,
     cyclic_1d_layout,
     undo_cyclic_1d_layout,
     manual_cyclic_1d_layout,
@@ -74,6 +75,7 @@ __all__ = [
     "potri",
     "syevd",
     "cyclic_1d_layout",
+    "cyclic_1d_no_shardmap",
     "undo_cyclic_1d_layout",
     "manual_cyclic_1d_layout",
     "calculate_padding",

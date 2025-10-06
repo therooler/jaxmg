@@ -10,7 +10,7 @@ from functools import partial
 from typing import Tuple
 
 from .cyclic_1d import (
-    _cyclic_1d,
+    cyclic_1d_no_shardmap,
     _undo_cyclic_1d,
     calculate_padding
 )
@@ -100,7 +100,7 @@ def potri(
     )
     def impl(_a):
         if not cyclic_1d and ndev > 1:
-            _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+            _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
 
         _a, status = jax.ffi.ffi_call(
             "potri_mg",

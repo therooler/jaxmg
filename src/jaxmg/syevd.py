@@ -29,7 +29,7 @@ from functools import partial
 from typing import Tuple
 
 from .cyclic_1d import (
-    _cyclic_1d,
+    cyclic_1d_no_shardmap,
     _undo_cyclic_1d,
 )
 from .utils import maybe_real_dtype_from_complex
@@ -130,7 +130,7 @@ def syevd(
         )
         def impl(_a):
             if not cyclic_1d and ndev > 1:
-                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
+                _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
 
             _ev, _a, status = jax.ffi.ffi_call(
                 target_name,
@@ -168,7 +168,7 @@ def syevd(
         )
         def impl(_a):
             if not cyclic_1d and ndev > 1:
-                _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
+                _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
 
             _ev, status = jax.ffi.ffi_call(
                 target_name,

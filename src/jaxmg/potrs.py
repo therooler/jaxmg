@@ -9,7 +9,7 @@ from jax.sharding import PartitionSpec as P, Mesh
 from typing import Tuple, List
 from functools import partial
 
-from .cyclic_1d import _cyclic_1d
+from .cyclic_1d import cyclic_1d_no_shardmap
 
 # Load the shared library with the FFI target definitions
 SHARED_LIBRARY = os.path.join(os.path.dirname(__file__), "bin/libpotrs.so")
@@ -102,7 +102,7 @@ def potrs(
     )
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
-            _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+            _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
         _out, status = jax.ffi.ffi_call(
             "potrs_mg",
             out_type,
@@ -149,6 +149,7 @@ def potrs_no_shardmap(
 
     Returns:
         The solution `x` as a 2D array, replicated across all devices.
+        The status of the solver, replicated across all devices.
 
     Raises:
         AssertionError: If `a` or `b` are not 2D, if their shapes do not match, or if `in_specs` is not of the correct length/type.
@@ -171,13 +172,13 @@ def potrs_no_shardmap(
 
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
-            _a = _cyclic_1d(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
-        _b, _ = jax.ffi.ffi_call(
+            _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
+        _b, status = jax.ffi.ffi_call(
             "potrs_mg",
             out_type,
             input_layouts=input_layouts,
             output_layouts=output_layouts,
         )(_a, _b, T_A=T_A)
-        return _b
+        return _b, status
 
     return impl(a, b)
