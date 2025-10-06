@@ -74,7 +74,6 @@
 #include "jax_utils.h"
 #include "cusolver_utils.h"
 #include "shm.h"
-#include "nan_kernel.h"
 
 DynamicBarrier sync_point;
 
@@ -170,7 +169,7 @@ namespace jax
             sharedMemoryInfo shminfoB;
             sharedMemoryInfo shminfowork;
             sharedMemoryInfo shminfolwork; // Shared memory info for lwork space nbytes
-            sharedMemoryInfo shmcsh;       // Shared memory info for lwork space nbytes
+            sharedMemoryInfo shmcsh;       // Shared memory info for cusolver status
 
             data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoA, "shmA"); // Actual shared memory
             data_type **shmB = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoB, "shmB");
@@ -184,11 +183,11 @@ namespace jax
                 // std::printf("Step 1: Create Mg handle and select devices (thread 0 only)\n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
-                for (int j = 0; j < nbGpus; j++)
-                {
-                    deviceList[j] = j;
-                    cudaDeviceProp prop;
-                    CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
+                // for (int j = 0; j < nbGpus; j++)
+                // {
+                //     deviceList[j] = j;
+                //     cudaDeviceProp prop;
+                //     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
                     // if (VERBOSE)
                     // {
                     //     std::printf("\tThere are %d GPUs \n", nbGpus);
@@ -196,7 +195,7 @@ namespace jax
                     //     std::printf("T_A: %d \n", T_A);
                     //     std::printf("T_B: %d \n", T_B);
                     // }
-                }
+                // }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
 
@@ -264,6 +263,7 @@ namespace jax
             */
             // std::printf("Step 8: Relayout data \n");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
             // std::printf("Relayout data \n");
             memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
                                          /* input */
@@ -335,7 +335,7 @@ namespace jax
                 {
                     cusolver_status_host[dev] = static_cast<int32_t>(cusolver_status);
                 }
-
+                /* check if A is singular */
                 if (0 > info)
                 {
                     return ffi::Error::Internal(

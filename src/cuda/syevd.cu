@@ -243,7 +243,7 @@ namespace jax
             // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
-            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork(currentDevice)), "workspace_syevd"));
+            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork[currentDevice]), "workspace_syevd"));
             shmwork[currentDevice] = workspace;
 
             /* sync all devices */

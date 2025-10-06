@@ -83,19 +83,19 @@ namespace jax
     {
         namespace ffi = ::xla::ffi;
 
-#define SOLVER_DISPATCH_IMPL(impl, ...)             \
-    switch (dataType)                               \
-    {                                               \
-    case ffi::F32:                                  \
-        return impl<float>(__VA_ARGS__);            \
-    case ffi::F64:                                  \
-        return impl<double>(__VA_ARGS__);           \
-    case ffi::C64:                                  \
-        return impl<cuFloatComplex>(__VA_ARGS__);       \
-    case ffi::C128:                                 \
+#define SOLVER_DISPATCH_IMPL(impl, ...)            \
+    switch (dataType)                              \
+    {                                              \
+    case ffi::F32:                                 \
+        return impl<float>(__VA_ARGS__);           \
+    case ffi::F64:                                 \
+        return impl<double>(__VA_ARGS__);          \
+    case ffi::C64:                                 \
+        return impl<cuFloatComplex>(__VA_ARGS__);  \
+    case ffi::C128:                                \
         return impl<cuDoubleComplex>(__VA_ARGS__); \
-    default:                                        \
-        break;                                      \
+    default:                                       \
+        break;                                     \
     }
         template <typename data_type>
         ffi::Error PotriMgImpl(int64_t N, int64_t batch_a,
@@ -104,7 +104,7 @@ namespace jax
                                ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             /* misc */
-            bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
+            // bool VERBOSE = false;                 // print matrices for debugging, does not work for complex!
             const std::string &source = __FILE__; // file name for error messages
 
             /* GPU */
@@ -139,7 +139,6 @@ namespace jax
             cusolverMgHandle_t cusolverH = cusolverHPool.get();
             int info = 0;                     // Info used by cusolverMg calls
             cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
-            int32_t cusolver_status_host;
             auto status_data = status->typed_data(); // Status returned by potri
             int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
             int64_t lwork_potri = 0;
@@ -149,12 +148,16 @@ namespace jax
             std::call_once(barrier_initialized, [&]()
                            { sync_point.initialize(nbGpus); });
             sync_point.arrive_and_wait();
+
             sharedMemoryInfo shminfoA; // Shared memory info for device pointers to local matrices
             sharedMemoryInfo shminfowork;
             sharedMemoryInfo shminfolwork; // Shared memory info for lwork space nbytes
+            sharedMemoryInfo shmcsh;       // Shared memory info for cusolver status
 
             data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoA, "shmA"); // Actual shared memory
             data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
+
+            int32_t *cusolver_status_host = get_shm_lwork_ptr<int32_t>(currentDevice, sync_point, shmcsh, "shmcsh");
             int64_t *shmlwork = get_shm_lwork_ptr<int64_t>(currentDevice, sync_point, shminfolwork, "shmlwork");
 
             if (currentDevice == 0)
@@ -162,18 +165,18 @@ namespace jax
                 // std::printf("Step 1: Create Mg handle and select devices (thread 0 only)\n");
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
-                for (int j = 0; j < nbGpus; j++)
-                {
-                    deviceList[j] = j;
-                    cudaDeviceProp prop;
-                    CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                    if (VERBOSE)
-                    {
-                        std::printf("\tThere are %d GPUs \n", nbGpus);
-                        std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
-                        std::printf("T_A: %d \n", T_A);
-                    }
-                }
+                // for (int j = 0; j < nbGpus; j++)
+                // {
+                //     deviceList[j] = j;
+                //     cudaDeviceProp prop;
+                //     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
+                // if (VERBOSE)
+                // {
+                //     std::printf("\tThere are %d GPUs \n", nbGpus);
+                //     std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
+                //     std::printf("T_A: %d \n", T_A);
+                // }
+                // }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
 
@@ -206,6 +209,9 @@ namespace jax
             // }
 
             // std::printf("Step 8: Relayout data \n");
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
+
             memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
                                          /* input */
                                          array_data_A, lda,
@@ -235,14 +241,15 @@ namespace jax
                 // *shmlwork = std::max(lwork_potrf, lwork_potri);
                 for (int dev = 0; dev < nbGpus; dev++)
                 {
-                    shmlwork[dev] = std::max(lwork_potrf, lwork_potrs);
+                    shmlwork[dev] = std::max(lwork_potrf, lwork_potri);
                 }
             }
             sync_point.arrive_and_wait();
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             // std::printf("\t%d: Allocate device workspace, lwork = %lld \n", currentDevice, static_cast<long long>(*shmlwork));
 
             /* array_d_work[j] points to device workspace of device j */
-            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork(currentDevice)), "workspace_potrf"));
+            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork[currentDevice]), "workspace_potrf"));
             shmwork[currentDevice] = workspace;
 
             /* sync all devices */
@@ -251,14 +258,19 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf(
+                cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA), IA, JA,
                     descrA, compute_type,
-                    reinterpret_cast<void **>(shmwork), *shmlwork, &info));
+                    reinterpret_cast<void **>(shmwork), *shmlwork, &info);
 
                 /* sync all devices */
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                // Copy status to all devices
+                for (int dev = 0; dev < nbGpus; dev++)
+                {
+                    cusolver_status_host[dev] = static_cast<int32_t>(cusolver_status);
+                }
 
                 /* check if A is singular */
                 if (0 > info)
@@ -266,39 +278,52 @@ namespace jax
                     return ffi::Error::Internal(
                         absl::StrFormat("unexpected error in cusolverMgPotrf, %d-th input parameter is wrong \n", -info));
                 }
-
-                cusolver_status = cusolverMgPotri(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
-                                                  reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                                  compute_type,
-                                                  reinterpret_cast<void **>(shmwork), *shmlwork,
-                                                  &info);
-
-                cusolver_status_host = static_cast<int32_t>(cusolver_status);
-                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                    status_data, &cusolver_status_host, sizeof(cusolver_status_host), gpuMemcpyHostToDevice, stream));
-
-                /* sync all devices */
-                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-
-                /* check if parameters are valid */
-                if (0 > info)
+                if (cusolver_status_host[0] == 0)
                 {
-                    return ffi::Error::Internal(
-                        absl::StrFormat("unexpected error in cusolverMgPotrs, %d-th input parameter is wrong \n", -info));
+                    cusolver_status = cusolverMgPotri(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
+                                                      reinterpret_cast<void **>(shmA), IA, JA, descrA,
+                                                      compute_type,
+                                                      reinterpret_cast<void **>(shmwork), *shmlwork,
+                                                      &info);
+                    /* sync all devices */
+                    CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+
+                    for (int dev = 0; dev < nbGpus; dev++)
+                    {
+                        cusolver_status_host[dev] = static_cast<int32_t>(cusolver_status);
+                    }
+                    /* check if parameters are valid */
+                    if (0 > info)
+                    {
+                        return ffi::Error::Internal(
+                            absl::StrFormat("unexpected error in cusolverMgPotrs, %d-th input parameter is wrong \n", -info));
+                    }
                 }
             }
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            // std::printf("Step 11: Solution vector b \n");
-
-            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpyAsync(
-                out_data, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice, stream));
+            // Write status data
+            int32_t status_val = static_cast<int32_t>(cusolver_status_host[currentDevice]);
+            JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(status_data, &status_val, sizeof(status_val), gpuMemcpyHostToDevice));
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
+            if (cusolver_status_host[currentDevice] == 0)
+            {
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice));
+            }
+            else
+            {
+                // std::printf("%d: filling nans %d \n", currentDevice, cusolver_status_host[currentDevice]);
+                // fill_nan<data_type>(reinterpret_cast<data_type *>(out_data), b.size_bytes(), stream);
+                std::vector<typename traits<data_type>::T> host_nan(N * batch_a, traits<data_type>::nan());
+                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, host_nan.data(), sizeof(data_type) * N * batch_a, gpuMemcpyHostToDevice));
+            }
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
             if (currentDevice == 0)
             {
                 // std::printf("Step 12: Free resources \n");
@@ -308,13 +333,10 @@ namespace jax
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridA));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
-                if (currentDevice == 0)
-                {
-                    sharedMemoryClose(&shminfoA);
-                    sharedMemoryClose(&shminfowork);
-                    sharedMemoryClose(&shminfolwork);
-                    // std::printf("%d: Shared memory destroyed\n", currentDevice);
-                }
+
+                sharedMemoryClose(&shminfoA);
+                sharedMemoryClose(&shminfowork);
+                sharedMemoryClose(&shminfolwork);
             }
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
