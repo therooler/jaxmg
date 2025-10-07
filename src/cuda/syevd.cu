@@ -169,6 +169,13 @@ namespace jax
             {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
+                for (int j = 0; j < nbGpus; j++)
+                {
+                    deviceList[j] = j;
+                    cudaDeviceProp prop;
+                    CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
+                }
+
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridA, 1, nbGpus, deviceList.data(), mapping));

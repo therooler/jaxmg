@@ -166,6 +166,13 @@ namespace jax
             if (currentDevice == 0)
             {
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
+                
+                for (int j = 0; j < nbGpus; j++)
+                {
+                    deviceList[j] = j;
+                    cudaDeviceProp prop;
+                    CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
+                }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
 
@@ -178,7 +185,7 @@ namespace jax
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
             }
-            
+
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
             memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
