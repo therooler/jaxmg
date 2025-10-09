@@ -1,6 +1,7 @@
 <p align="center">
     <img src="resources/logo.png" alt="Jaxmg" width="300">
 </p>
+
 # JAXMg: A distributed linear solver in JAX with cuSolverMg
 
 This repository provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api), NVIDIA’s multi-GPU linear solver.  
