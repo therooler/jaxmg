@@ -1,4 +1,4 @@
-<img src="resources/logo.png" alt="Jaxmg" width="800">
+<img src="resources/logo.png" alt="Jaxmg" width="300">
 
 # JAXMg: A distributed linear solver in JAX with cuSolverMg
 
