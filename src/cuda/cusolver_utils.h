@@ -85,14 +85,13 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
         {
             break;
         }
-        CUDA_CHECK(cudaMemcpy2DAsync(d_A, /* dst */
+        CUDA_CHECK(cudaMemcpy2D(d_A, /* dst */
                                      static_cast<size_t>(LLD_A) * sizeof(T_ELEM),
                                      h_A, /* src */
                                      static_cast<size_t>(ldb) * sizeof(T_ELEM),
                                      static_cast<size_t>(M) * sizeof(T_ELEM),
                                      static_cast<size_t>(T_A_clip),
-                                     cudaMemcpyDeviceToDevice,
-                                     stream));
+                                     cudaMemcpyDeviceToDevice));
         nz_blks++;
         global_blk_id += num_devices;
     }
