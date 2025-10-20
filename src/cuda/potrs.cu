@@ -162,6 +162,7 @@ namespace jax
             static std::once_flag barrier_initialized; // Initialize barrier once between threads
             std::call_once(barrier_initialized, [&]()
                            { sync_point.initialize(nbGpus); });
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
             sharedMemoryInfo shminfoA; // Shared memory info for device pointers to local matrices
