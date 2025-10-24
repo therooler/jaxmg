@@ -8,6 +8,10 @@
 #include <memory>
 #include <cstddef>
 #include <cstdint>
+// CUDA
+#include <cuda_runtime.h>
+// Own code
+#include "process_barrier.h"
 
 #define MAX_DEVICES 16
 
@@ -24,27 +28,22 @@ int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info);
 
 void sharedMemoryClose(sharedMemoryInfo *info);
 
-typedef struct shmStruct_st
-{
-    int64_t lwork = 0;                // Work buff
-    int devices[MAX_DEVICES];         // Participating device IDs
-    double *device_ptrs[MAX_DEVICES]; // IPC memory handles
-} shmStruct;
-
-class DynamicBarrier
-{
-private:
-    std::unique_ptr<std::barrier<>> barrier_ptr;
-
-public:
-    void initialize(int thread_count);
-    void arrive_and_wait();
-};
-
 template <typename T>
 T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 
 template <typename T>
 T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+
+cudaIpcMemHandle_t *get_shm_ipc_handles(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+
+typedef struct shmStruct_st
+{
+    size_t nprocesses;
+    int barrier;
+    int sense;
+    int devices[16];
+    cudaIpcMemHandle_t memHandle[16];
+    cudaIpcEventHandle_t eventHandle[16];
+} shmStruct;
 
 #endif // SHM_MULTIPROCESS_H
