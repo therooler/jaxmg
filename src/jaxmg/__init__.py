@@ -4,7 +4,6 @@ import ctypes
 import warnings
 import sys
 
-from functools import partial
 from .utils import JaxMgWarning
 
 if not sys.platform.startswith("linux"):
@@ -38,27 +37,39 @@ import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
+from .utils import determine_distributed_setup
+
 if any("gpu" == d.platform for d in jax.devices()):
 
-    @partial(jax.pmap, axis_name="d")
-    def warmup(x):
-        return jax.lax.psum(x, "d")
-
-    if jax.local_device_count() != jax.device_count():
+    n_nodes, n_devices_per_node, n_devices_per_process, mode = (
+        determine_distributed_setup()
+    )
+    if n_nodes > 1:
         warnings.warn(
-            f"Multiple processes detected ({jax.local_device_count()} local devices, {jax.device_count()} total devices). \n"
-            "Ensure that jaxmg is only called over a local device mesh, otherwise process might hang...",
+            f"Computation seems to be running on multiple nodes.\n"
+            "Ensure that jaxmg is only called over a local device mesh, otherwise process might hang.\n"
+            "See examples for how this can be safely achieved.",
             JaxMgWarning,
             stacklevel=2,
         )
-        # if jax.local_device_count
-        # jax.block_until_ready(
-        #     warmup(jnp.ones((jax.local_device_count(),)))
-        # )  # triggers NCCL setup
+    if mode == "SPMD":
+        from .potrs import potrs, potrs_no_shardmap
+        from .potri import potri
+        from .syevd import syevd
+    elif mode == "MPMD":
+        from .potrs_mp import potrs, potrs_no_shardmap
+    else:
+        raise ValueError(
+            f"You have {n_nodes} nodes with {n_devices_per_process} devices per process.\n"
+            "JAXMg only supports one process for all devices per node or one process per device across all nodes"
+        )
 
-from .potrs import potrs, potrs_no_shardmap
-from .potri import potri
-from .syevd import syevd
+else:
+    warnings.warn(
+        f"No GPUs found, only use this mode for testing.",
+        JaxMgWarning,
+        stacklevel=2,
+    )
 from .cyclic_1d import (
     cyclic_1d_no_shardmap,
     cyclic_1d_layout,
@@ -71,8 +82,7 @@ from .cyclic_1d import (
 
 __all__ = [
     "potrs",
-    "potrs_no_shardmap"
-    "potri",
+    "potrs_no_shardmap" "potri",
     "syevd",
     "cyclic_1d_layout",
     "cyclic_1d_no_shardmap",
@@ -80,5 +90,6 @@ __all__ = [
     "manual_cyclic_1d_layout",
     "calculate_padding",
     "calculate_valid_T_A",
-    "calculate_all_valid_T_A"
+    "calculate_all_valid_T_A",
+    "determine_distributed_setup",
 ]

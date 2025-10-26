@@ -1,4 +1,7 @@
 # In file gpu_example.py...
+import os
+# os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+# os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 
 import jax
 import sys
@@ -16,13 +19,16 @@ jax.distributed.initialize(coordinator_address=coord_addr,
 print("process id =", jax.process_index())
 print("global devices =", jax.devices())
 print("local devices =", jax.local_devices())
+print("visible devices", os.environ["CUDA_VISIBLE_DEVICES"])
 import jax.numpy as jnp
 from jax.sharding import NamedSharding, PartitionSpec as P
 from jaxmg import potrs
+from jaxmg import determine_distributed_setup
 
+print(determine_distributed_setup())
 N = 8  # - 2**12
 NRHS = 1
-T_A = 1
+T_A = 2
 dtype = jnp.float32
 
 ndev = jax.device_count()

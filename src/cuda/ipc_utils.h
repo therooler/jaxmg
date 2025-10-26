@@ -12,7 +12,16 @@ template <typename T>
 void ipcGetHandleAndOffset(T *array_data_A, cudaIpcMemHandle_t &handle, size_t &offset);
 
 template <typename T>
-std::vector<T *> ipcGetDevicePointers(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+struct IpcOpenResult
+{
+    std::vector<T *> ptrs;     // offset-applied logical pointers (what you use)
+    std::vector<void *> bases; // base pointers from cudaIpcOpenMemHandle (what you close)
+};
+
+template <typename T>
+IpcOpenResult<T> ipcGetDevicePointers(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+
+void ipcCloseDevicePointers(int currentDevice, const std::vector<void *> &bases, int nbGpus);
 
 void print_current_context();
 

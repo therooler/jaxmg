@@ -10,6 +10,8 @@
 #include "third_party/gpus/cuda/include/cuComplex.h"
 #include "third_party/gpus/cuda/include/cuda_runtime.h"
 #include "third_party/gpus/cuda/include/cuda.h"
+// Own code
+#include "ipc_utils.h"
 
 template <typename T>
 void ipcGetHandleAndOffset(T *array_data_A, cudaIpcMemHandle_t &handle, size_t &offset)
@@ -45,7 +47,7 @@ template void ipcGetHandleAndOffset<cuFloatComplex>(cuFloatComplex *array_data_A
 template void ipcGetHandleAndOffset<cuDoubleComplex>(cuDoubleComplex *array_data_A, cudaIpcMemHandle_t &handle, size_t &offset);
 
 template <typename T>
-std::vector<T *> ipcGetDevicePointers(
+IpcOpenResult<T> ipcGetDevicePointers(
     int currentDevice,           // this process's device ordinal
     int nbGpus,                  // number of GPUs participating
     cudaIpcMemHandle_t *shmAipc, // per-device IPC handles (exported by each process)
@@ -53,28 +55,49 @@ std::vector<T *> ipcGetDevicePointers(
 )
 {
     const int MAX_NUM_DEVICES = 16;
-
+    IpcOpenResult<T> out;
+    out.ptrs.assign(MAX_NUM_DEVICES, nullptr);
+    out.bases.assign(MAX_NUM_DEVICES, nullptr);
     // Return vector sized to 16.
-    std::vector<T *> shmA(MAX_NUM_DEVICES, nullptr);
 
     // Only the coordinator (dev 0) opens peers (matches your current pattern).
-    for (int dev = 1; dev < nbGpus; ++dev)
+    for (int dev = 0; dev < nbGpus; ++dev)
     {
+        if (dev == currentDevice)
+        {
+            continue;
+        }
+        cudaSetDevice(dev);
         void *opened_base = nullptr;
         cudaIpcOpenMemHandle(&opened_base, shmAipc[dev], cudaIpcMemLazyEnablePeerAccess);
         // Apply the peer's byte offset to get the logical subarray pointer.
-        auto *p = reinterpret_cast<unsigned char *>(opened_base) + shmoffsetA[dev];
-        shmA[dev] = reinterpret_cast<T *>(p);
+        out.bases[dev] = opened_base;
+        auto *bytes = static_cast<unsigned char *>(opened_base) + shmoffsetA[dev];
+        out.ptrs[dev] = reinterpret_cast<T *>(bytes);
     }
-
-    return shmA;
+    cudaSetDevice(currentDevice);
+    return out;
 }
 
-template std::vector<float *> ipcGetDevicePointers<float>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
-template std::vector<double *> ipcGetDevicePointers<double>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
-template std::vector<cuFloatComplex *> ipcGetDevicePointers<cuFloatComplex>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
-template std::vector<cuDoubleComplex *> ipcGetDevicePointers<cuDoubleComplex>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+template IpcOpenResult<float> ipcGetDevicePointers<float>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+template IpcOpenResult<double> ipcGetDevicePointers<double>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+template IpcOpenResult<cuFloatComplex> ipcGetDevicePointers<cuFloatComplex>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
+template IpcOpenResult<cuDoubleComplex> ipcGetDevicePointers<cuDoubleComplex>(int currentDevice, int nbGpus, cudaIpcMemHandle_t *shmAipc, size_t *shmoffsetA);
 
+void ipcCloseDevicePointers(int currentDevice, const std::vector<void *> &bases, int nbGpus)
+{
+    for (int dev = 0; dev < nbGpus; ++dev)
+    {
+        if (dev == currentDevice)
+        {
+            continue;
+        }
+        if (bases[dev])
+        {
+            cudaIpcCloseMemHandle(bases[dev]);
+        }
+    }
+}
 void print_current_context()
 {
     cuInit(0); // safe if already initialized
