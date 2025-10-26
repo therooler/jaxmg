@@ -167,6 +167,7 @@ T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemory
 
 template int64_t *get_shm_lwork_ptr<int64_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
 template int32_t *get_shm_lwork_ptr<int32_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+template size_t *get_shm_lwork_ptr<size_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
 
 cudaIpcMemHandle_t *get_shm_ipc_handles(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {

@@ -31,6 +31,7 @@ CPMAddPackage(
     GIT_REPOSITORY https://github.com/abseil/abseil-cpp
     GIT_TAG 20250512.1
 )
+
 # Import CUDAToolkit (Requires CUDA_HOME to be set)
 find_package(CUDAToolkit REQUIRED)
 find_library(CUSOLVERMG_LIB cusolverMg HINTS "${CUDA_TOOLKIT_ROOT_DIR}/lib64" REQUIRED)
@@ -58,6 +59,7 @@ CPMAddPackage(
     DOWNLOAD_ONLY YES
 )
 message(STATUS "XLA source directory: ${XLA_SOURCE_DIR}")
+
 # Since jaxlib is asking for #include "third_party/gpus/cuda/extras/CUPTI/include/cupti.h"
 # we need to create a symlink to to CUDA_HOME and pretend it can be accessed from third_party
 # Create the target directory
@@ -78,9 +80,10 @@ if(NOT ln_result EQUAL 0)
 endif()
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/xla/ffi)
 execute_process(
-    COMMAND ln -sfn ${XLA_SOURCE_DIR}/xla/ffi/api ${CMAKE_SOURCE_DIR}/xla/ffi/
+    COMMAND ln -sfn ${XLA_SOURCE_DIR}/xla/ffi/api ${CMAKE_SOURCE_DIR}/xla/ffi
     RESULT_VARIABLE ln_result
 )
+
 if(NOT ln_result EQUAL 0)
     message(FATAL_ERROR "Failed to create symlink for XLA_DIR: ${XLA_SOURCE_DIR}")
 endif()
@@ -92,6 +95,7 @@ add_library(potrs SHARED
     src/cuda/potrs.cu
     src/cuda/jax_utils.cc
     src/cuda/shm.cc
+    src/cuda/ipc_utils.cc
     ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
 )
 add_library(potri SHARED
