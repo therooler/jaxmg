@@ -12,6 +12,7 @@
 #include <cuda_runtime.h>
 // Own code
 #include "process_barrier.h"
+#include "thread_barrier.h"
 
 #define MAX_DEVICES 16
 
@@ -29,10 +30,10 @@ int sharedMemoryOpen(const char *name, size_t sz, sharedMemoryInfo *info);
 void sharedMemoryClose(sharedMemoryInfo *info);
 
 template <typename T>
-T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+T **get_shm_device_ptrs(int currentDevice, ThreadBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 
-template <typename T>
-T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
+template <typename T, typename barrier>
+T *get_shm_lwork_ptr(int currentDevice, barrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 
 cudaIpcMemHandle_t *get_shm_ipc_handles(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName);
 

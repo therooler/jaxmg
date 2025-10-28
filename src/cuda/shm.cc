@@ -17,6 +17,7 @@
 #include "third_party/gpus/cuda/include/cuda_runtime.h"
 // Own code
 #include "process_barrier.h"
+#include "thread_barrier.h"
 
 int sharedMemoryCreate(const char *name, size_t sz, sharedMemoryInfo *info)
 {
@@ -80,7 +81,7 @@ void sharedMemoryClose(sharedMemoryInfo *info)
 }
 
 template <typename T>
-T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
+T **get_shm_device_ptrs(int currentDevice, ThreadBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
   T **shm = nullptr;
   pid_t pid = getppid();
@@ -98,7 +99,7 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
       printf("Failed to create shared memory\n");
       exit(EXIT_FAILURE); // #TODO: replace this with proper JAX error handling
     }
-    printf("Created shm in device %d\n", currentDevice);
+    // printf("Created shm in device %d\n", currentDevice);
     shm = (T **)info.addr;
     memset((void *)shm, 0, shmSize);
   }
@@ -120,13 +121,13 @@ T **get_shm_device_ptrs(int currentDevice, DynamicBarrier &sync_point, sharedMem
   return shm;
 }
 
-template float **get_shm_device_ptrs<float>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
-template double **get_shm_device_ptrs<double>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
-template cuFloatComplex **get_shm_device_ptrs<cuFloatComplex>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
-template cuDoubleComplex **get_shm_device_ptrs<cuDoubleComplex>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+template float **get_shm_device_ptrs<float>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
+template double **get_shm_device_ptrs<double>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
+template cuFloatComplex **get_shm_device_ptrs<cuFloatComplex>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
+template cuDoubleComplex **get_shm_device_ptrs<cuDoubleComplex>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
 
-template <typename T>
-T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
+template <typename T, typename barrier>
+T *get_shm_lwork_ptr(int currentDevice, barrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
   pid_t pid = getppid();
   char lshmName[40] = {0};
@@ -165,9 +166,13 @@ T *get_shm_lwork_ptr(int currentDevice, DynamicBarrier &sync_point, sharedMemory
   return shm;
 }
 
-template int64_t *get_shm_lwork_ptr<int64_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
-template int32_t *get_shm_lwork_ptr<int32_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
-template size_t *get_shm_lwork_ptr<size_t>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+template int64_t *get_shm_lwork_ptr<int64_t, DynamicBarrier>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+template int32_t *get_shm_lwork_ptr<int32_t, DynamicBarrier>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+template size_t *get_shm_lwork_ptr<size_t, DynamicBarrier>(int, DynamicBarrier &, sharedMemoryInfo &, const char *);
+
+template int64_t *get_shm_lwork_ptr<int64_t, ThreadBarrier>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
+template int32_t *get_shm_lwork_ptr<int32_t, ThreadBarrier>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
+template size_t *get_shm_lwork_ptr<size_t, ThreadBarrier>(int, ThreadBarrier &, sharedMemoryInfo &, const char *);
 
 cudaIpcMemHandle_t *get_shm_ipc_handles(int currentDevice, DynamicBarrier &sync_point, sharedMemoryInfo &info, const char *shmName)
 {
