@@ -1,9 +1,12 @@
+import socket
 import os
+import hashlib
 
 import jax
 import jax.numpy as jnp
 from jax.sharding import NamedSharding
 from jax import Array
+from jax.experimental import multihost_utils as mh
 
 
 def random_psd(n, dtype, seed):
@@ -41,18 +44,49 @@ def symmetrize(_a):
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""
 
+def numeric_machine_key():
+    # 128-bit hash of hostname
+    h = hashlib.blake2b(socket.gethostname().encode(), digest_size=16).digest()
+    hi = int.from_bytes(h[:8], "big")
+    lo = int.from_bytes(h[8:], "big")
+    return jnp.array([hi, lo], dtype=jnp.uint64)
 
 def determine_distributed_setup():
     n_proc = jax.process_count()
-    n_devices_per_node = len(os.environ["CUDA_VISIBLE_DEVICES"].split(","))
+    my_id = socket.gethostname()
+    all_ids = mh.process_allgather(
+        numeric_machine_key()
+    )  # list of len = num_processes, ordered by process_index
+    # print(all_ids)
+    unique_ids = set(str(row[0])+str(row[1]) for row in all_ids)
+    # print(unique_ids)
+    num_machines = len(unique_ids)
+    # print(all_ids)
+    print("calling determine")
+    cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
+    n_visisble_devices = len(cuda_visible_devices.split(","))
     n_devices = jax.device_count()
-    n_nodes = n_devices // n_devices_per_node
+    n_devices_per_machine = n_devices // num_machines
     n_devices_per_process = n_devices // n_proc
-    if n_devices_per_process==n_devices_per_node:
+    n_local_devices = jax.local_device_count()
+    configuration_str = (
+        f"\t{num_machines} machine(s), {n_proc} process(es), "
+        f"{n_local_devices} local device(s), {n_visisble_devices} visible device(s)"
+    )
+    if n_proc == num_machines:
+        if n_local_devices != n_visisble_devices:
+            raise ValueError(
+                f"Invalid distributed configuration detected: \n {configuration_str}\n"
+                "The number of local devices cannot differ from the visible devices in SPMD mode"
+            )
         mode = "SPMD"
-    elif n_devices_per_process==1: 
+    elif n_devices_per_process == 1:
         mode = "MPMD"
     else:
-        return n_nodes, n_devices_per_process, "UNKNOWN"
-    
-    return n_nodes, n_devices_per_node, n_devices_per_process, mode
+        raise ValueError(
+            f"Invalid distributed configuration detected: \n {configuration_str}\n"
+            "JAXMg requires either a single process per machine (SPMD)"
+            "or a single process for each GPU (MPMD)"
+        )
+
+    return num_machines, n_devices_per_machine, n_devices_per_process, mode
