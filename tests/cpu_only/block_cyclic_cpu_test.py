@@ -3,7 +3,7 @@ import os
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(this_dir, "..")
-print(src_path)
+
 sys.path.append(src_path)
 import jax
 
@@ -18,7 +18,6 @@ from jaxmg import (
     calculate_valid_T_A,
     undo_cyclic_1d_layout
 )
-
 
 devices = jax.devices()
 ndev = len(devices)

@@ -255,9 +255,13 @@ True
 
 > **Note:** Jax will complain about replication errors if you do not pass `check_vma=True`. This is likely because it cannot infer the output sharding from the ffi call.
 
-### Multi-process support
+### SPMD and MPMD support
 
-`jaxmg` supports multi-process `jax.distributed` environments but cuSolverMg **can only run in a single process**. There are some technical reasons for this (see below) that will hopefully be resolved in a future release.
+We support two modes of distributed computing. Single Process Multiple Devices mode (SPMD), where we have
+a single process per node that potentially manages multiple devices. We also support MPMD mode (MPMD). Here the user needs to
+use one process for each GPU. When `jaxmg` is imported, we attempt to verify the user's distributed setup to not go out beyond these two modes of computation.
+
+`jaxmg` supports multi-process `jax.distributed` environments but cuSolverMg **can only run on a single node**. There are some technical reasons for this (see below) that will hopefully be resolved in a future release.
 
 To circumvent this limitation, one can perform a computation over all global devices, replicate the results over all host by gathering the data and calling the solver only on the process-local devices. 
 
@@ -485,9 +489,11 @@ out= potrs(
 
 - **Maximum number of GPUs:** According to the cuSolverMg documentation, the current maximum number of GPUs is hardcoded to be 16. Going beyond this value will raise a an error from within CUDA code.
 
-## Technical details of multi-process limitations
+## Technical details of implementation
 
-When `potrs.cu` is called in a `jax.shard_map` context through the `jax.ffi` API, 
+### SPMD mode
+
+When `potrs.cu` is called in a `jax.shard_map` context through the `jax.ffi` API with a single process for multiple devices,
 
 ```python
 _out, status = jax.ffi.ffi_call(
@@ -512,9 +518,7 @@ std::call_once(barrier_initialized, [&](){ sync_point.initialize(nbGpus); });
 ```
 to initialize the barrier across all threads. The `std::once_flag` ensures that the barrier is initialized exactly once so that all threads see the same barrier.
 
-In a multi-process context this mechanism could probably be replaced by MPI calls where we syncronise across processes. 
-
-The real problem is point 2. Right now, we share device pointers between threads through the creation of shared memory:
+We share device pointers between threads through the creation of shared memory:
 
 ```C++
 data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice,sync_point, shminfoA, "shmA"); 
@@ -536,13 +540,40 @@ cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N,NRHS,
                                   &info);
 ```
 
-In a multi-process context it is not as straightforward to setup memory sharing between processes, especially when it comes to passing around device pointers which are bound to a specific CUDA context. The long-term solution will probably involve device pointer management through CUDAs Interprocess Communication API but this will likely be a significant development effort (which I am unable to commit to at the moment). 
+### MPMD mode
+
+In a multi-process context it is not as straightforward to setup memory sharing between processes, especially when it comes to passing around device pointers which are bound to a specific CUDA context. 
+
+The solution used here is to make use of the cudaIPC documentation, which allows one to export handles to device memory to
+different processes. In `potrs_mp.cu`, we achieve this again through shared memory, although now we share the cudaIPC memory
+handles:
+
+```cpp
+ipcGetHandleAndOffset(array_data_A, shmAipc[currentDevice], shmoffsetA[currentDevice]);
+```
+
+A significant complication is that JAX' memory allocation is managed by XLA, which means that device pointers are actually
+base pointers together with some offset. cudaIPC only exports the base-pointer, so we have to manually pass around the 
+offset and extract the true pointer:
+
+```cpp
+opened_ptrs_A = ipcGetDevicePointers<data_type>(currentDevice, nbGpus, shmAipc, shmoffsetA);
+```
+
+We gather all the pointers in process 0 and set up the solver in the same way as before. After completion, it is essential
+to close the memory handles
+
+```cpp
+ipcCloseDevicePointers(currentDevice, opened_ptrs_A.bases, nbGpus);
+```
+
+to avoid memory leaks.
 
 > **Note:** If you've made it this far into the README.md and have experience or thoughts on this, please reach out!
 
 
 ### cuSolverMp
-As of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to eventually switch to this API. This will require sharding data into a cyclic 2D form and handling the solver orchestration with MPI, which will force the user to use one process per GPU.
+As of CUDA 13, there is a new distributed linear algebra library called [cuSolverMp](https://docs.nvidia.com/cuda/cusolvermp/) with similar capabilities as cuSolverMg, that does support multi-node computations as well as >16 devices. Given the similarities in syntax, it should be straightforward to eventually switch to this API. This will require sharding data into a cyclic 2D form and handling the solver orchestration with MPI.
 
 ## Development
 
