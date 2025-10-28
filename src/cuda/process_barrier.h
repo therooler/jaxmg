@@ -123,7 +123,7 @@ public:
             s->count = s->n;
             s->rounds++;
             pthread_cond_broadcast(&s->cv);
-            std::printf("Round: %d\n", s->rounds);
+            // std::printf("Round: %d\n", s->rounds);
             pthread_mutex_unlock(&s->mtx);
         }
         else
