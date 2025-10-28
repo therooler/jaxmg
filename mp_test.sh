@@ -1,5 +1,5 @@
 num_processes=2
-
+# export CUDA_VISIBLE_DEVICES="0"
 range=$(seq 0 $(($num_processes - 1)))
 HOSTS=($(scontrol show hostnames "$SLURM_JOB_NODELIST"))
 echo $HOSTS
