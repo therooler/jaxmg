@@ -3,6 +3,7 @@ import pathlib
 import ctypes
 import warnings
 import sys
+import os
 
 from .utils import JaxMgWarning
 
@@ -41,12 +42,13 @@ from .utils import determine_distributed_setup
 
 if any("gpu" == d.platform for d in jax.devices()):
 
-    n_nodes, n_devices_per_node, n_devices_per_process, mode = (
+    n_machines, n_devices_per_node, n_devices_per_process, mode = (
         determine_distributed_setup()
     )
-    if n_nodes > 1:
+    os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(n_devices_per_node)
+    if n_machines > 1:
         warnings.warn(
-            f"Computation seems to be running on multiple nodes.\n"
+            f"Computation seems to be running on multiple machines.\n"
             "Ensure that jaxmg is only called over a local device mesh, otherwise process might hang.\n"
             "See examples for how this can be safely achieved.",
             JaxMgWarning,
@@ -56,20 +58,16 @@ if any("gpu" == d.platform for d in jax.devices()):
         from .potrs import potrs, potrs_no_shardmap
         from .potri import potri
         from .syevd import syevd
-    elif mode == "MPMD":
-        from .potrs_mp import potrs, potrs_no_shardmap
     else:
-        raise ValueError(
-            f"You have {n_nodes} nodes with {n_devices_per_process} devices per process.\n"
-            "JAXMg only supports one process for all devices per node or one process per device across all nodes"
-        )
-
+        from .potrs_mp import potrs, potrs_no_shardmap
 else:
     warnings.warn(
         f"No GPUs found, only use this mode for testing.",
         JaxMgWarning,
         stacklevel=2,
     )
+    os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(jax.device_count())
+
 from .cyclic_1d import (
     cyclic_1d_no_shardmap,
     cyclic_1d_layout,
@@ -82,7 +80,8 @@ from .cyclic_1d import (
 
 __all__ = [
     "potrs",
-    "potrs_no_shardmap" "potri",
+    "potrs_no_shardmap",
+    "potri",
     "syevd",
     "cyclic_1d_layout",
     "cyclic_1d_no_shardmap",
