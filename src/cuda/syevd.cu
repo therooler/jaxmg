@@ -73,9 +73,10 @@
 // My Code
 #include "jax_utils.h"
 #include "cusolver_utils.h"
+#include "thread_barrier.h"
 #include "shm.h"
 
-DynamicBarrier sync_point;
+ThreadBarrier sync_point;
 
 namespace jax
 {
@@ -162,8 +163,8 @@ namespace jax
             data_type **shmev = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoev, "shmev"); // Actual shared memory
             data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
 
-            int32_t *cusolver_status_host = get_shm_lwork_ptr<int32_t>(currentDevice, sync_point, shmcsh, "shmcsh");
-            int64_t *shmlwork = get_shm_lwork_ptr<int64_t>(currentDevice, sync_point, shminfolwork, "shmlwork");
+            int32_t *cusolver_status_host = get_shm_lwork_ptr<int32_t, ThreadBarrier>(currentDevice, sync_point, shmcsh, "shmcsh");
+            int64_t *shmlwork = get_shm_lwork_ptr<int64_t, ThreadBarrier>(currentDevice, sync_point, shminfolwork, "shmlwork");
 
             if (currentDevice == 0)
             {
