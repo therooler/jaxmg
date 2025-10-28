@@ -69,7 +69,9 @@ def potrs(
     assert a.ndim == 2, "a must be a 2D array."
     assert b.ndim == 2, "b must be a 2D array."
 
-    assert isinstance(in_specs, (tuple, list)), f"expected `in_specs` to be a tuple or list of `PartitionSpec` objects, received {in_specs}"
+    assert isinstance(
+        in_specs, (tuple, list)
+    ), f"expected `in_specs` to be a tuple or list of `PartitionSpec` objects, received {in_specs}"
     assert len(in_specs) == 2, f"expected two `in_specs`, received {in_specs}"
 
     spec_a, spec_b = in_specs
@@ -102,7 +104,9 @@ def potrs(
     )
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
-            _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1])
+            _a = cyclic_1d_no_shardmap(
+                _a, T_A=T_A, ndev=ndev, axis_name=spec_a._partitions[1]
+            )
         _out, status = jax.ffi.ffi_call(
             "potrs_mg",
             out_type,
@@ -116,14 +120,10 @@ def potrs(
         return out, status[0]
     else:
         return out
-    
+
 
 def potrs_no_shardmap(
-    a: Array,
-    b: Array,
-    T_A: int,
-    cyclic_1d: bool = False,
-    axis_name="x"
+    a: Array, b: Array, T_A: int, cyclic_1d: bool = False, axis_name="x"
 ):
     """
     Solves the linear system `a * x = b` for `x` using the Cholesky decomposition of a symmetric positive-definite matrix `a`
@@ -166,9 +166,9 @@ def potrs_no_shardmap(
     )
     output_layouts = ((1, 0), (0,))
     out_type = (
-            jax.ShapeDtypeStruct(b.shape, b.dtype),
-            jax.ShapeDtypeStruct((1,), jnp.int32),
-        )
+        jax.ShapeDtypeStruct(b.shape, b.dtype),
+        jax.ShapeDtypeStruct((1,), jnp.int32),
+    )
 
     def impl(_a, _b):
         if not cyclic_1d and ndev > 1:
