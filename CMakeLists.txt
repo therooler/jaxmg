@@ -95,6 +95,13 @@ add_library(potrs SHARED
     src/cuda/potrs.cu
     src/cuda/jax_utils.cc
     src/cuda/shm.cc
+    ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
+)
+
+add_library(potrs_mp SHARED
+    src/cuda/potrs_mp.cu
+    src/cuda/jax_utils.cc
+    src/cuda/shm.cc
     src/cuda/ipc_utils.cc
     ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
 )
@@ -119,12 +126,16 @@ add_library(syevd_no_V SHARED
 
 # Make sure we can see "thirdparty/gpus" and jax
 target_include_directories(potrs PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
+target_include_directories(potrs_mp PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(potri PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(syevd PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 target_include_directories(syevd_no_V PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR})
 
 # Set the CUDA architecture
 set_target_properties(potrs PROPERTIES
+    CUDA_ARCHITECTURES "all"
+)
+set_target_properties(potrs_mp PROPERTIES
     CUDA_ARCHITECTURES "all"
 )
 set_target_properties(potri PROPERTIES
@@ -147,6 +158,16 @@ target_link_libraries(potrs
     ${CUSOLVERMG_LIB}
     cuda
 )
+target_link_libraries(potrs_mp
+    absl::strings
+    absl::status
+    absl::statusor
+    CUDA::cusolver
+    CUDA::cupti
+    ${CUSOLVERMG_LIB}
+    cuda
+)
+
 target_link_libraries(potri
     absl::strings
     absl::status
@@ -179,6 +200,9 @@ target_link_libraries(syevd_no_V
 install(TARGETS potrs
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
+install(TARGETS potrs_mp
+    LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
+)
 install(TARGETS potri
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
@@ -193,6 +217,7 @@ install(TARGETS syevd_no_V
 # cmake ..
 # cmake --build . --target install
 # OR
+# cmake --build . --target potrs_mp && cmake --install .
 # cmake --build . --target potrs && cmake --install .
 # cmake --build . --target potri && cmake --install .
 # cmake --build . --target syevd && cmake --install .
