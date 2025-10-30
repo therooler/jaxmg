@@ -266,7 +266,7 @@ namespace jax
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-            // printf("Opening memory...");
+            printf("Opening memory...");
             // Gather all device pointers on rank 0
             if (currentDevice == 0)
             {
@@ -285,7 +285,7 @@ namespace jax
                 shmB[0] = array_data_b;
                 shmoutdata[0] = out_data;
             }
-            // printf("Done with memory allocs");
+            printf("Done with memory allocs");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -311,7 +311,7 @@ namespace jax
             }
 
             sync_point.arrive_and_wait();
-            // printf("lwork %zu\n", shmlwork[currentDevice]);
+            printf("lwork %zu\n", shmlwork[currentDevice]);
 
             // Assing workspace handle
             FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork[currentDevice]), "workspace_potrf"));
@@ -324,6 +324,7 @@ namespace jax
             sync_point.arrive_and_wait();
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             // Get all workspace pointers on rank 0.
+            printf("Get workspace");
             if (currentDevice == 0)
             {
                 opened_ptrs_work = ipcGetDevicePointers<data_type>(currentDevice, nbGpus, shmworkipc, shmoffsetwork);
@@ -337,11 +338,11 @@ namespace jax
             // /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-
+            printf("Starting solve");
             if (currentDevice == 0)
             {
-                std::vector<typename traits<data_type>::T> hostA(N * batch_a);
-                std::vector<typename traits<data_type>::T> hostB(N);
+                // std::vector<typename traits<data_type>::T> hostA(N * batch_a);
+                // std::vector<typename traits<data_type>::T> hostB(N);
                 // for (int dev = 0; dev < nbGpus; dev++)
                 // {
                 //     // Printer A
@@ -355,6 +356,7 @@ namespace jax
                 //     CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
                 //     print_matrix(N, 1, hostB.data(), N);
                 // }
+                // cusolver_status =
                 cusolver_status = cusolverMgPotrf(
                     cusolverH, CUBLAS_FILL_MODE_LOWER, N,
                     reinterpret_cast<void **>(shmA.data()), IA, JA,
@@ -362,8 +364,9 @@ namespace jax
                     reinterpret_cast<void **>(shmwork.data()), *shmlwork, &info);
 
                 /* sync all devices */
+                // printf("Finished potrf");
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-
+                printf("syncing potrf");
                 // Copy status to all devices
                 for (int dev = 0; dev < nbGpus; dev++)
                 {
@@ -406,7 +409,7 @@ namespace jax
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-            // printf("Done with solve");
+            printf("Done with solve");
             if (currentDevice == 0)
             {
                 std::vector<typename traits<data_type>::T> host_out(N);
@@ -476,7 +479,7 @@ namespace jax
                                    ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
                                    ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
-            // printf("hit dispatch");
+            printf("hit dispatch");
             auto dataType = a.element_type();
             // Columns are batched
             FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));

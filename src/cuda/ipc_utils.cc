@@ -59,7 +59,7 @@ IpcOpenResult<T> ipcGetDevicePointers(
     out.ptrs.assign(MAX_NUM_DEVICES, nullptr);
     out.bases.assign(MAX_NUM_DEVICES, nullptr);
     // Return vector sized to 16.
-
+    cudaError_t status;
     // Only the coordinator (dev 0) opens peers (matches your current pattern).
     for (int dev = 0; dev < nbGpus; ++dev)
     {
@@ -69,7 +69,15 @@ IpcOpenResult<T> ipcGetDevicePointers(
         }
         cudaSetDevice(dev);
         void *opened_base = nullptr;
-        cudaIpcOpenMemHandle(&opened_base, shmAipc[dev], cudaIpcMemLazyEnablePeerAccess);
+        status = cudaIpcOpenMemHandle(&opened_base, shmAipc[dev], cudaIpcMemLazyEnablePeerAccess);
+        const char *err_name = cudaGetErrorName(status);
+        const char *err_str = cudaGetErrorString(status);
+        if (status != cudaSuccess) {
+            printf("cudaIpcOpenMemHandle(dev=%d) -> %d (%s): %s\n",
+                    dev, static_cast<int>(status),
+                    err_name ? err_name : "UNKNOWN",
+                    err_str ? err_str : "UNKNOWN");
+        }
         // Apply the peer's byte offset to get the logical subarray pointer.
         out.bases[dev] = opened_base;
         auto *bytes = static_cast<unsigned char *>(opened_base) + shmoffsetA[dev];
