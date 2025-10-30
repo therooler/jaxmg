@@ -215,8 +215,8 @@ namespace jax
                     deviceList[j] = j;
                     cudaDeviceProp prop;
                     CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
-                    std::printf("\tThere are %d GPUs \n", nbGpus);
-                    std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
+                    // std::printf("\tThere are %d GPUs \n", nbGpus);
+                    // std::printf("\tDevice %d, %s, cc %d.%d \n", j, prop.name, prop.major, prop.minor);
                 }
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
@@ -394,7 +394,7 @@ namespace jax
                     {
                         cusolver_status_host[dev] = static_cast<int32_t>(cusolver_status);
                     }
-                    printf("Status %d", cusolver_status_host[0]);
+                    // printf("Status %d", cusolver_status_host[0]);
                     /* check if parameters are valid */
                     if (0 > info)
                     {
@@ -413,12 +413,12 @@ namespace jax
                 size_t numBytes = sizeof(data_type) * N;
                 CUDA_CHECK_OR_RETURN(cudaMemcpy(host_out.data(), shmB[0], numBytes, cudaMemcpyDeviceToHost));
                 CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-                print_matrix(N, 1, host_out.data(), N);
+                // print_matrix(N, 1, host_out.data(), N);
             }
             // // Write status data
             int32_t status_val = static_cast<int32_t>(cusolver_status_host[currentDevice]);
             JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(status_data, &status_val, sizeof(status_val), gpuMemcpyHostToDevice));
-            printf("Status %d", status_val);
+            // printf("Status %d", status_val);
             // // Write solution to all shmBs
             if (currentDevice == 0)
             {
