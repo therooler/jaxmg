@@ -175,7 +175,7 @@ def potrs_no_shardmap(
         if not cyclic_1d and ndev > 1:
             _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
         _b, status = jax.ffi.ffi_call(
-            "potrs_mg",
+            "potrs_mp_mg",
             out_type,
             input_layouts=input_layouts,
             output_layouts=output_layouts,
