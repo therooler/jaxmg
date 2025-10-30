@@ -168,7 +168,7 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
+                // CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
 
                 for (int j = 0; j < nbGpus; j++)
                 {
@@ -297,7 +297,7 @@ namespace jax
 
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridA));
 
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
+                // CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
                 if (currentDevice == 0)
                 {
                     sharedMemoryClose(&shminfoA);

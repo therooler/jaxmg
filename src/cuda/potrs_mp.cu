@@ -200,16 +200,13 @@ namespace jax
             IpcOpenResult<data_type> opened_ptrs_work;
             cudaIpcMemHandle_t *shmworkipc = get_shm_ipc_handles(currentDevice, sync_point, shminfoworkipc, "shmworkipc");
             size_t *shmoffsetwork = get_shm_lwork_ptr<size_t>(currentDevice, sync_point, shminfo_offsetwork, "shmoffsetwork");
-            // data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoA, "shmA"); // Actual shared memory
-            // data_type **shmB = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfoB, "shmB");
-            // data_type **shmwork = get_shm_device_ptrs<data_type>(currentDevice, sync_point, shminfowork, "shmwork");
 
             int32_t *cusolver_status_host = get_shm_lwork_ptr<int32_t>(currentDevice, sync_point, shmcsh, "shmcsh");
             int64_t *shmlwork = get_shm_lwork_ptr<int64_t>(currentDevice, sync_point, shminfolwork, "shmlwork");
 
             if (currentDevice == 0)
             {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
+                // CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
                 for (int j = 0; j < nbGpus; j++)
                 {
                     deviceList[j] = j;
@@ -262,13 +259,14 @@ namespace jax
             );
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
+
             ipcGetHandleAndOffset(array_data_A, shmAipc[currentDevice], shmoffsetA[currentDevice]);
             ipcGetHandleAndOffset(array_data_b, shmBipc[currentDevice], shmoffsetB[currentDevice]);
             ipcGetHandleAndOffset(out_data, shmoutdataipc[currentDevice], shmoffsetoutdata[currentDevice]);
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-
+            // printf("Opening memory...");
             // Gather all device pointers on rank 0
             if (currentDevice == 0)
             {
@@ -287,6 +285,7 @@ namespace jax
                 shmB[0] = array_data_b;
                 shmoutdata[0] = out_data;
             }
+            // printf("Done with memory allocs");
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -376,7 +375,7 @@ namespace jax
                     return ffi::Error::Internal(
                         absl::StrFormat("unexpected error in cusolverMgPotrf, %d-th input parameter is wrong \n", -info));
                 }
-                printf("Status %d", cusolver_status_host[0]);
+                // printf("Status %d", cusolver_status_host[0]);
 
                 // Check status, if 0, continue with Potrs
                 if (cusolver_status_host[0] == 0)
@@ -407,6 +406,7 @@ namespace jax
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
+            // printf("Done with solve");
             if (currentDevice == 0)
             {
                 std::vector<typename traits<data_type>::T> host_out(N);
@@ -447,7 +447,7 @@ namespace jax
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridA));
                 CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroyGrid(gridB));
 
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
+                // CUSOLVER_CHECK_OR_RETURN(cusolverMgDestroy(cusolverH));
                 // Shared memory close
                 sharedMemoryClose(&shminfo_offsetA);
                 sharedMemoryClose(&shminfoAipc);
@@ -476,6 +476,7 @@ namespace jax
                                    ffi::AnyBuffer a, ffi::AnyBuffer b, int64_t tile_size,
                                    ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
+            // printf("hit dispatch");
             auto dataType = a.element_type();
             // Columns are batched
             FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
