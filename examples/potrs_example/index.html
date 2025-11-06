@@ -12,26 +12,28 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://docs.kidger.site/jaxmg/">
+        <link rel="canonical" href="https://docs.kidger.site/jaxmg/examples/potrs_example/">
       
       
+        <link rel="prev" href="../..">
       
-        <link rel="next" href="examples/potrs_example/">
+      
+        <link rel="next" href="../potrs_shard_map/">
       
       
-      <link rel="icon" href="_static/square.png">
+      <link rel="icon" href="../../_static/square.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
       
-        <title>JAXMg</title>
+        <title>Cholesky decomposition with jaxmg.potrs - JAXMg</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.84d31ad4.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.84d31ad4.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,13 +52,13 @@
       
     
     
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="assets/_hippogriffe.css">
+      <link rel="stylesheet" href="../../assets/_hippogriffe.css">
     
-      <link rel="stylesheet" href="_static/custom.css">
+      <link rel="stylesheet" href="../../_static/custom.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -81,6 +83,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#cholesky-decomposition-with-jaxmgpotrs" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -93,9 +100,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="JAXMg" class="md-header__button md-logo" aria-label="JAXMg" data-md-component="logo">
+    <a href="../.." title="JAXMg" class="md-header__button md-logo" aria-label="JAXMg" data-md-component="logo">
       
-  <img src="_static/square.png" alt="logo">
+  <img src="../../_static/square.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -112,7 +119,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Cholesky decomposition with jaxmg.potrs
             
           </span>
         </div>
@@ -230,9 +237,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="JAXMg" class="md-nav__button md-logo" aria-label="JAXMg" data-md-component="logo">
+    <a href="../.." title="JAXMg" class="md-nav__button md-logo" aria-label="JAXMg" data-md-component="logo">
       
-  <img src="_static/square.png" alt="logo">
+  <img src="../../_static/square.png" alt="logo">
 
     </a>
     JAXMg
@@ -256,17 +263,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -277,7 +277,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -286,8 +285,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -298,11 +299,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
         
           
           <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
@@ -318,7 +319,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -329,10 +330,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="examples/potrs_example/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -343,6 +353,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -355,7 +366,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/potrs_shard_map/" class="md-nav__link">
+      <a href="../potrs_shard_map/" class="md-nav__link">
         
   
   
@@ -378,7 +389,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/block_cyclic_data_layout/" class="md-nav__link">
+      <a href="../block_cyclic_data_layout/" class="md-nav__link">
         
   
   
@@ -401,7 +412,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/spmd_mpmd/" class="md-nav__link">
+      <a href="../spmd_mpmd/" class="md-nav__link">
         
   
   
@@ -474,7 +485,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potrs/" class="md-nav__link">
+      <a href="../../api/potrs/" class="md-nav__link">
         
   
   
@@ -497,7 +508,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potrs_mp/" class="md-nav__link">
+      <a href="../../api/potrs_mp/" class="md-nav__link">
         
   
   
@@ -520,7 +531,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potri/" class="md-nav__link">
+      <a href="../../api/potri/" class="md-nav__link">
         
   
   
@@ -543,7 +554,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/syevd/" class="md-nav__link">
+      <a href="../../api/syevd/" class="md-nav__link">
         
   
   
@@ -566,7 +577,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/cyclic_1d/" class="md-nav__link">
+      <a href="../../api/cyclic_1d/" class="md-nav__link">
         
   
   
@@ -596,7 +607,7 @@
   
   
     <li class="md-nav__item">
-      <a href="technical_details/" class="md-nav__link">
+      <a href="../../technical_details/" class="md-nav__link">
         
   
   
@@ -627,20 +638,38 @@
 
 
 
-  <h1>Home</h1>
+<h1 id="cholesky-decomposition-with-jaxmgpotrs">Cholesky decomposition with jaxmg.potrs<a class="headerlink" href="#cholesky-decomposition-with-jaxmgpotrs" title="Permanent link">¤</a></h1>
+<p>Here, we give an example of calling <code>jax.potrs</code>, which solves the linear system of equations <span class="arithmatex">\(Ax=b\)</span> for symmetric, positive-definite <span class="arithmatex">\(A\)</span> via a Cholesky decomposition.</p>
+<p>The interface of <code>jaxmg.potrs</code> is simple to use; one needs to supply to underlying mesh of the sharded data and specify the input shardings:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># examples/readme.py</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionSpec</span> <span class="k">as</span> <span class="n">P</span><span class="p">,</span> <span class="n">NamedSharding</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">potrs</span>
 
-<p>JAXMg provides a C++ interface between <a href="https://github.com/google/jax">JAX</a> and <a href="https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api">cuSolverMg</a>, NVIDIA’s multi-GPU linear solver.  We provide a jittable API for the following routines.</p>
-<ul>
-<li><code>cusolverMgPotrs</code>: Solves the system of linear equations: <span class="arithmatex">\(Ax=b\)</span> where <span class="arithmatex">\(A\)</span> is an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.</li>
-<li><code>cusolverMgPotri</code>: Computes the inverse of an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.</li>
-<li><code>cusolverMgSyevd</code>: Computes eigenvalues and eigenvectors of an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) matrix.</li>
-</ul>
-<p>The provided binary is compiled with:
-- <strong>GCC</strong>: 11.5.0<br />
-- <strong>CUDA</strong>: 12.8.0<br />
-- <strong>cuDNN</strong>: 9.2.0.82-12  </p>
+<span class="c1"># Assumes we have at least one GPU available</span>
+<span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="s2">&quot;Example only works for 1 or 2 devices&quot;</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">12</span>
+<span class="n">T_A</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+<span class="c1"># Create diagonal matrix and `b` all equal to one</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+<span class="c1"># Make mesh and place data (columns sharded)</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="c1"># Call potrs</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">potrs</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="n">expected_out</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">expected_out</span><span class="p">))</span>
+</code></pre></div>
+<p>Note that we did not have to perform the cyclic relayout here since <code>jaxmg.potrs</code> calls <code>cyclic_1d_layout</code> before calling the solver.</p>
 <blockquote>
-<p><strong>Note:</strong> JAX&gt;=0.6.0 ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.</p>
+<p><strong>Note:</strong> If the user can ensure that the matrix <code>A</code> is already in block cyclic form, then <code>jaxmg.potrs</code> can be called with the argument <code>cyclic_1d=True</code> (<code>False</code> by default). If the data is not laid out correctly, then calling <code>jaxmg.potrs</code> will result in an array of <code>NaN</code>s and a nonzero status, indicating the failure of solver.</p>
 </blockquote>
 
 
@@ -690,12 +719,12 @@
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": ["navigation.instant", "navigation.sections", "toc.integrate", "header.autohide"], "search": "assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["navigation.instant", "navigation.sections", "toc.integrate", "header.autohide"], "search": "../../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
-        <script src="_static/mathjax.js"></script>
+        <script src="../../_static/mathjax.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       

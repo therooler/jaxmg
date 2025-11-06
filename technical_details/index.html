@@ -12,26 +12,26 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://docs.kidger.site/jaxmg/">
+        <link rel="canonical" href="https://docs.kidger.site/jaxmg/technical_details/">
+      
+      
+        <link rel="prev" href="../api/cyclic_1d/">
       
       
       
-        <link rel="next" href="examples/potrs_example/">
-      
-      
-      <link rel="icon" href="_static/square.png">
+      <link rel="icon" href="../_static/square.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.23">
     
     
       
-        <title>JAXMg</title>
+        <title>Technical details - JAXMg</title>
       
     
     
-      <link rel="stylesheet" href="assets/stylesheets/main.84d31ad4.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.84d31ad4.min.css">
       
         
-        <link rel="stylesheet" href="assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -50,13 +50,13 @@
       
     
     
-      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
     
-      <link rel="stylesheet" href="assets/_hippogriffe.css">
+      <link rel="stylesheet" href="../assets/_hippogriffe.css">
     
-      <link rel="stylesheet" href="_static/custom.css">
+      <link rel="stylesheet" href="../_static/custom.css">
     
-    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -81,6 +81,11 @@
     <label class="md-overlay" for="__drawer"></label>
     <div data-md-component="skip">
       
+        
+        <a href="#spmd-mode" class="md-skip">
+          Skip to content
+        </a>
+      
     </div>
     <div data-md-component="announce">
       
@@ -93,9 +98,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="." title="JAXMg" class="md-header__button md-logo" aria-label="JAXMg" data-md-component="logo">
+    <a href=".." title="JAXMg" class="md-header__button md-logo" aria-label="JAXMg" data-md-component="logo">
       
-  <img src="_static/square.png" alt="logo">
+  <img src="../_static/square.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -112,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Home
+              Technical details
             
           </span>
         </div>
@@ -230,9 +235,9 @@
 
 <nav class="md-nav md-nav--primary md-nav--integrated" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="." title="JAXMg" class="md-nav__button md-logo" aria-label="JAXMg" data-md-component="logo">
+    <a href=".." title="JAXMg" class="md-nav__button md-logo" aria-label="JAXMg" data-md-component="logo">
       
-  <img src="_static/square.png" alt="logo">
+  <img src="../_static/square.png" alt="logo">
 
     </a>
     JAXMg
@@ -256,17 +261,10 @@
       
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-      
-      <a href="." class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
         
   
   
@@ -277,7 +275,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -332,7 +329,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/potrs_example/" class="md-nav__link">
+      <a href="../examples/potrs_example/" class="md-nav__link">
         
   
   
@@ -355,7 +352,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/potrs_shard_map/" class="md-nav__link">
+      <a href="../examples/potrs_shard_map/" class="md-nav__link">
         
   
   
@@ -378,7 +375,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/block_cyclic_data_layout/" class="md-nav__link">
+      <a href="../examples/block_cyclic_data_layout/" class="md-nav__link">
         
   
   
@@ -401,7 +398,7 @@
   
   
     <li class="md-nav__item">
-      <a href="examples/spmd_mpmd/" class="md-nav__link">
+      <a href="../examples/spmd_mpmd/" class="md-nav__link">
         
   
   
@@ -474,7 +471,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potrs/" class="md-nav__link">
+      <a href="../api/potrs/" class="md-nav__link">
         
   
   
@@ -497,7 +494,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potrs_mp/" class="md-nav__link">
+      <a href="../api/potrs_mp/" class="md-nav__link">
         
   
   
@@ -520,7 +517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/potri/" class="md-nav__link">
+      <a href="../api/potri/" class="md-nav__link">
         
   
   
@@ -543,7 +540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/syevd/" class="md-nav__link">
+      <a href="../api/syevd/" class="md-nav__link">
         
   
   
@@ -566,7 +563,7 @@
   
   
     <li class="md-nav__item">
-      <a href="api/cyclic_1d/" class="md-nav__link">
+      <a href="../api/cyclic_1d/" class="md-nav__link">
         
   
   
@@ -593,10 +590,30 @@
       
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="technical_details/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Technical details
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -607,6 +624,42 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#spmd-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      SPMD mode
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mpmd-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      MPMD mode
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -627,20 +680,61 @@
 
 
 
-  <h1>Home</h1>
+  <h1>Technical details</h1>
 
-<p>JAXMg provides a C++ interface between <a href="https://github.com/google/jax">JAX</a> and <a href="https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api">cuSolverMg</a>, NVIDIA’s multi-GPU linear solver.  We provide a jittable API for the following routines.</p>
-<ul>
-<li><code>cusolverMgPotrs</code>: Solves the system of linear equations: <span class="arithmatex">\(Ax=b\)</span> where <span class="arithmatex">\(A\)</span> is an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.</li>
-<li><code>cusolverMgPotri</code>: Computes the inverse of an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition.</li>
-<li><code>cusolverMgSyevd</code>: Computes eigenvalues and eigenvectors of an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) matrix.</li>
-</ul>
-<p>The provided binary is compiled with:
-- <strong>GCC</strong>: 11.5.0<br />
-- <strong>CUDA</strong>: 12.8.0<br />
-- <strong>cuDNN</strong>: 9.2.0.82-12  </p>
+<h2 id="spmd-mode">SPMD mode<a class="headerlink" href="#spmd-mode" title="Permanent link">¤</a></h2>
+<p>When <code>potrs.cu</code> is called in a <code>jax.shard_map</code> context through the <code>jax.ffi</code> API with a single process for multiple devices,</p>
+<div class="highlight"><pre><span></span><code><span class="n">_out</span><span class="p">,</span> <span class="n">status</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">ffi</span><span class="o">.</span><span class="n">ffi_call</span><span class="p">(</span>
+            <span class="s2">&quot;potrs_mg&quot;</span><span class="p">,</span>
+            <span class="n">out_type</span><span class="p">,</span>
+            <span class="n">input_layouts</span><span class="o">=</span><span class="n">input_layouts</span><span class="p">,</span>
+            <span class="n">output_layouts</span><span class="o">=</span><span class="n">output_layouts</span><span class="p">,</span>
+        <span class="p">)(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">)</span>
+</code></pre></div>
+<p>a thread will spawn for each available GPU that executes the code in <code>potrs.cu</code>. Each thread will only have access to its local shard in GPU memory through a device pointer. The <code>cuSolverMgPotrf</code> API must be called in a single thread and requires an array of <strong>all</strong> device pointers containing the shards on each GPU. </p>
+<p>This raises the following two issues.</p>
+<ol>
+<li>We need to synchronise the threads to set up <code>cuSolverMgPotrf</code> and the data. We then need to execute the solver in thread 0 and have the other threads wait for it to finish. However, JAX has spawned the threads and we do not have any explict control over the thread  syncronization.</li>
+<li>Since each thread only has access to its local shard, we need to somehow make thread 0 aware of the device pointers across all other threads.</li>
+</ol>
+<p>We solver the first issue by initializing a global barrier via <code>std::unique_ptr&lt;std::barrier&lt;&gt;&gt; barrier_ptr</code>. Here <code>std::unique_ptr</code> takes care of deleting the barrier when it goes out of scope (when the FFI call finishes). Then, in <code>potrs.cu</code> we use 
+<div class="highlight"><pre><span></span><code><span class="k">static</span><span class="w"> </span><span class="n">std</span><span class="o">::</span><span class="n">once_flag</span><span class="w"> </span><span class="n">barrier_initialized</span><span class="p">;</span>
+<span class="n">std</span><span class="o">::</span><span class="n">call_once</span><span class="p">(</span><span class="n">barrier_initialized</span><span class="p">,</span><span class="w"> </span><span class="p">[</span><span class="o">&amp;</span><span class="p">](){</span><span class="w"> </span><span class="n">sync_point</span><span class="p">.</span><span class="n">initialize</span><span class="p">(</span><span class="n">nbGpus</span><span class="p">);</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+to initialize the barrier across all threads. The <code>std::once_flag</code> ensures that the barrier is initialized exactly once so that all threads see the same barrier.</p>
+<p>We share device pointers between threads through the creation of shared memory:</p>
+<div class="highlight"><pre><span></span><code><span class="n">data_type</span><span class="w"> </span><span class="o">**</span><span class="n">shmA</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">get_shm_device_ptrs</span><span class="o">&lt;</span><span class="n">data_type</span><span class="o">&gt;</span><span class="p">(</span><span class="n">currentDevice</span><span class="p">,</span><span class="n">sync_point</span><span class="p">,</span><span class="w"> </span><span class="n">shminfoA</span><span class="p">,</span><span class="w"> </span><span class="s">&quot;shmA&quot;</span><span class="p">);</span><span class="w"> </span>
+</code></pre></div>
+<p>In each thread, we then assign the device pointer of the local shard to this shared memory:</p>
+<div class="highlight"><pre><span></span><code><span class="n">shmA</span><span class="p">[</span><span class="n">currentDevice</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">array_data_A</span><span class="p">;</span>
+</code></pre></div>
+<p>which we can safely pass to <code>cuSolverMgPotrf</code>:
+<div class="highlight"><pre><span></span><code><span class="n">cusolver_status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">cusolverMgPotrs</span><span class="p">(</span><span class="n">cusolverH</span><span class="p">,</span><span class="w"> </span><span class="n">CUBLAS_FILL_MODE_LOWER</span><span class="p">,</span><span class="w"> </span><span class="n">N</span><span class="p">,</span><span class="n">NRHS</span><span class="p">,</span><span class="w"> </span>
+<span class="w">                                  </span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">void</span><span class="w"> </span><span class="o">**&gt;</span><span class="p">(</span><span class="n">shmA</span><span class="p">),</span><span class="w"> </span><span class="n">IA</span><span class="p">,</span><span class="w"> </span><span class="n">JA</span><span class="p">,</span><span class="w"> </span><span class="n">descrA</span><span class="p">,</span>
+<span class="w">                                  </span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">void</span><span class="w"> </span><span class="o">**&gt;</span><span class="p">(</span><span class="n">shmB</span><span class="p">),</span><span class="w"> </span><span class="n">IB</span><span class="p">,</span><span class="w"> </span><span class="n">JB</span><span class="p">,</span><span class="w"> </span><span class="n">descrB</span><span class="p">,</span>
+<span class="w">                                  </span><span class="n">compute_type</span><span class="p">,</span>
+<span class="w">                                  </span><span class="k">reinterpret_cast</span><span class="o">&lt;</span><span class="kt">void</span><span class="w"> </span><span class="o">**&gt;</span><span class="p">(</span><span class="n">shmwork</span><span class="p">),</span><span class="w"> </span><span class="o">*</span><span class="n">shmlwork</span><span class="p">,</span>
+<span class="w">                                  </span><span class="o">&amp;</span><span class="n">info</span><span class="p">);</span>
+</code></pre></div></p>
+<h2 id="mpmd-mode">MPMD mode<a class="headerlink" href="#mpmd-mode" title="Permanent link">¤</a></h2>
+<p>In a multi-process context it is not as straightforward to setup memory sharing between processes, especially when it comes to passing around device pointers which are bound to a specific CUDA context. </p>
+<p>The solution used here is to make use of the cudaIPC documentation, which allows one to export handles to device memory to
+different processes. In <code>potrs_mp.cu</code>, we achieve this again through shared memory, although now we share the cudaIPC memory
+handles:</p>
+<div class="highlight"><pre><span></span><code><span class="n">ipcGetHandleAndOffset</span><span class="p">(</span><span class="n">array_data_A</span><span class="p">,</span><span class="w"> </span><span class="n">shmAipc</span><span class="p">[</span><span class="n">currentDevice</span><span class="p">],</span><span class="w"> </span><span class="n">shmoffsetA</span><span class="p">[</span><span class="n">currentDevice</span><span class="p">]);</span>
+</code></pre></div>
+<p>A significant complication is that JAX' memory allocation is managed by XLA, which means that device pointers are actually
+base pointers together with some offset. cudaIPC only exports the base-pointer, so we have to manually pass around the 
+offset and extract the true pointer:</p>
+<div class="highlight"><pre><span></span><code><span class="n">opened_ptrs_A</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">ipcGetDevicePointers</span><span class="o">&lt;</span><span class="n">data_type</span><span class="o">&gt;</span><span class="p">(</span><span class="n">currentDevice</span><span class="p">,</span><span class="w"> </span><span class="n">nbGpus</span><span class="p">,</span><span class="w"> </span><span class="n">shmAipc</span><span class="p">,</span><span class="w"> </span><span class="n">shmoffsetA</span><span class="p">);</span>
+</code></pre></div>
+<p>We gather all the pointers in process 0 and set up the solver in the same way as before. After completion, it is essential
+to close the memory handles</p>
+<div class="highlight"><pre><span></span><code><span class="n">ipcCloseDevicePointers</span><span class="p">(</span><span class="n">currentDevice</span><span class="p">,</span><span class="w"> </span><span class="n">opened_ptrs_A</span><span class="p">.</span><span class="n">bases</span><span class="p">,</span><span class="w"> </span><span class="n">nbGpus</span><span class="p">);</span>
+</code></pre></div>
+<p>to avoid memory leaks.</p>
 <blockquote>
-<p><strong>Note:</strong> JAX&gt;=0.6.0 ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.</p>
+<p><strong>Note:</strong> If you've made it this far into the README.md and have experience or thoughts on this, please reach out!</p>
 </blockquote>
 
 
@@ -690,12 +784,12 @@
     
     
       
-      <script id="__config" type="application/json">{"base": ".", "features": ["navigation.instant", "navigation.sections", "toc.integrate", "header.autohide"], "search": "assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"base": "..", "features": ["navigation.instant", "navigation.sections", "toc.integrate", "header.autohide"], "search": "../assets/javascripts/workers/search.973d3a69.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="assets/javascripts/bundle.f55a23d4.min.js"></script>
+      <script src="../assets/javascripts/bundle.f55a23d4.min.js"></script>
       
-        <script src="_static/mathjax.js"></script>
+        <script src="../_static/mathjax.js"></script>
       
         <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
       

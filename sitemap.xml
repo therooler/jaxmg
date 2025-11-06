@@ -5,6 +5,14 @@
          <lastmod>2025-11-06</lastmod>
     </url>
     <url>
+         <loc>https://docs.kidger.site/jaxmg/install/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.kidger.site/jaxmg/technical_details/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
          <loc>https://docs.kidger.site/jaxmg/api/cyclic_1d/</loc>
          <lastmod>2025-11-06</lastmod>
     </url>
@@ -22,6 +30,22 @@
     </url>
     <url>
          <loc>https://docs.kidger.site/jaxmg/api/syevd/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.kidger.site/jaxmg/examples/block_cyclic_data_layout/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.kidger.site/jaxmg/examples/potrs_example/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.kidger.site/jaxmg/examples/potrs_shard_map/</loc>
+         <lastmod>2025-11-06</lastmod>
+    </url>
+    <url>
+         <loc>https://docs.kidger.site/jaxmg/examples/spmd_mpmd/</loc>
          <lastmod>2025-11-06</lastmod>
     </url>
 </urlset>
