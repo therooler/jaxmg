@@ -116,10 +116,10 @@ html {
 /* Change default colours for <a> tags */
 
 [data-md-color-scheme="default"] {
-    --md-typeset-a-color: rgb(0, 189, 164) !important;
+    --md-typeset-a-color: rgb(94, 151, 246) !important;
 }
 [data-md-color-scheme="slate"] {
-    --md-typeset-a-color: rgb(0, 189, 164) !important;
+    --md-typeset-a-color: rgb(94, 151, 246) !important;
 }
 
 /* Highlight functions, classes etc. type signatures. Really helps to make clear where
@@ -150,3 +150,32 @@ h5.doc-heading, h6.heading {
     border-radius: 2pt;
     padding: 0pt 5pt 2pt 5pt;
 }
+
+
+/* Place the logo as a background on the persistent sidebar element to avoid
+   flicker when the navigation is re-rendered. This keeps a single stable
+   background image and prevents the <img> from being removed/inserted. */
+.md-sidebar {
+    background-image: url('logo.png');
+    background-repeat: no-repeat;
+    background-position: center 0.6rem; /* centered horizontally, slightly from top */
+    background-size: 180px auto;
+    /* Ensure there's space for the background logo so it doesn't overlap the nav */
+    padding-top: 110px;
+}
+
+@media (max-width: 720px) {
+    .md-sidebar {
+        background-size: 120px auto;
+        padding-top: 80px;
+        background-position: center 0.4rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .md-sidebar {
+        background-size: 96px auto;
+        padding-top: 64px;
+    }
+}
+
