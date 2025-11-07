@@ -12,6 +12,7 @@ html {
 
 nav.md-nav {
   padding-left: 5px;
+  padding-bottom: 5px;
 }
 
 nav.md-nav--secondary {
@@ -61,7 +62,7 @@ div.doc-contents {
 html {
     /* Decrease font size for overall webpage
        Down from 137.5% which is the Material default */
-    font-size: 110%;
+    font-size: 137.5%;
 }
 
 .md-typeset .admonition {
@@ -155,17 +156,17 @@ h5.doc-heading, h6.heading {
 /* Place the logo as a background on the persistent sidebar element to avoid
    flicker when the navigation is re-rendered. This keeps a single stable
    background image and prevents the <img> from being removed/inserted. */
-.md-sidebar {
+.md-sidebar--primary {
     background-image: url('logo.png');
     background-repeat: no-repeat;
     background-position: center 0.6rem; /* centered horizontally, slightly from top */
     background-size: 180px auto;
     /* Ensure there's space for the background logo so it doesn't overlap the nav */
-    padding-top: 110px;
+    padding-top: 140px;
 }
 
 @media (max-width: 720px) {
-    .md-sidebar {
+    .md-sidebar--primary {
         background-size: 120px auto;
         padding-top: 80px;
         background-position: center 0.4rem;
@@ -173,7 +174,7 @@ h5.doc-heading, h6.heading {
 }
 
 @media (max-width: 480px) {
-    .md-sidebar {
+    .md-sidebar--primary {
         background-size: 96px auto;
         padding-top: 64px;
     }
