@@ -26,10 +26,6 @@ The provided binary is compiled with:
 
 > **Note:** JAX ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
 
-<!-- ### Contents
-* [Installation](#installation) -->
-
-
 ## Installation
 
 Clone the repository and install with:
