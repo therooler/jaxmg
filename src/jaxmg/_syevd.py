@@ -28,11 +28,8 @@ from jax.sharding import PartitionSpec as P, Mesh
 from functools import partial
 from typing import Tuple, Union
 
-from ._cyclic_1d import (
-    cyclic_1d_no_shardmap,
-    undo_cyclic_1d_no_shardmap,
-)
 from .utils import maybe_real_dtype_from_complex
+from ._cyclic_1d import calculate_padding, pad_rows, unpad_rows
 
 
 def syevd(
@@ -41,9 +38,9 @@ def syevd(
     mesh: Mesh,
     in_specs: Tuple[P],
     return_eigenvectors: bool = True,
-    cyclic_1d: bool = False,
     return_status: bool = False,
- ) -> Union[Array, Tuple[Array, Array], Tuple[Array, Array, int], Tuple[Array, int]]:
+    pad=True,
+) -> Union[Array, Tuple[Array, Array], Tuple[Array, Array, int], Tuple[Array, int]]:
     """
     Computes the eigenvalue decomposition of a symmetric matrix `a` using a distributed multi-GPU CUDA kernel via JAX FFI.
 
@@ -74,98 +71,119 @@ def syevd(
         AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
         ValueError: If the input array does not have the correct sharding or if T_A > 1024.
     """
-
-    assert a.ndim == 2, "a must be a 2D array."
-    if isinstance(in_specs, (tuple, list)):
-        assert len(in_specs) == 1, f"expected only one `in_specs`, received {in_specs}"
-
-        (spec_a,) = in_specs
-    else:
-        spec_a = in_specs
-
     ndev = jax.local_device_count()
-
-    axis_name = spec_a._partitions[1]
-
-    if (spec_a._partitions[0] != None) or (axis_name == None):
-        raise ValueError(
-            "A must be sharded along the columns with PartitionSpec P(None, str)."
+    # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
+    if isinstance(in_specs, (list, tuple)):
+        if len(in_specs) != 1:
+            raise ValueError(
+                "in_specs must be a single PartitionSpec or a 1-element list/tuple."
+            )
+        in_specs = in_specs[0]
+    if not isinstance(in_specs, P):
+        raise TypeError(
+            "in_specs must be a PartitionSpec or a 1-element list/tuple containing one."
         )
+    if (in_specs._partitions[1] != None) or (in_specs._partitions[0] == None):
+        raise ValueError(
+            "A must be sharded along the rows with PartitionSpec P(str, None)."
+        )
+    assert a.ndim == 2, "a must be a 2D array."
     if T_A > 1024:
         raise ValueError(
             "T_A has a maximum value of 1024 for SyevdMg, received T_A={T_A}"
         )
-    shard_size = a.shape[0] // ndev
-    shard_size_needed = shard_size + (T_A - (shard_size % T_A)) % T_A
+    axis_name = in_specs._partitions[0]
+    N_rows, N = a.shape
+
+    shard_size = N_rows // ndev
+
+    padding = calculate_padding(shard_size, T_A)
+    input_layouts = ((0, 1),)
+    if not pad or padding == 0 or T_A >= N // ndev:
+        if T_A < N // ndev:
+            assert (
+                N_rows == N + ndev * padding
+            ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
+            f"Expected {N + ndev * padding} rows, but received {N_rows}"
+
+        # Identity padding
+        pad_fn = lambda _a: _a
+        unpad_fn = lambda _a: _a
+        padding = 0
+
+    else:
+        # Make padding fns
+        pad_fn = jax.shard_map(
+            partial(pad_rows, padding=padding),
+            mesh=mesh,
+            in_specs=P(axis_name, None),
+            out_specs=P(axis_name, None),
+            check_vma=True,
+        )
+        unpad_fn = jax.shard_map(
+            partial(unpad_rows, padding=padding),
+            mesh=mesh,
+            in_specs=P(axis_name, None),
+            out_specs=P(axis_name, None),
+            check_vma=True,
+        )
 
     if return_eigenvectors:
         target_name = "syevd_mg"
         out_type = (
-            jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
-            jax.ShapeDtypeStruct((a.shape[0], shard_size_needed), a.dtype),
+            jax.ShapeDtypeStruct((N,), maybe_real_dtype_from_complex(a.dtype)),
+            jax.ShapeDtypeStruct((shard_size + padding, N), a.dtype),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
-        out_specs = (P(), spec_a, P(axis_name))
-        output_layouts = ((0,), (1, 0), (0,))
+        output_layouts = ((0,), (0, 1), (0,))
+        out_specs = (P(None), P(axis_name, None), P(None))
 
-        @partial(
-            jax.shard_map,
-            mesh=mesh,
-            in_specs=in_specs,
-            out_specs=out_specs,
-            check_vma=False,
-        )
-        def impl(_a):
-            if not cyclic_1d and ndev > 1:
-                _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
-
-            _ev, _a, status = jax.ffi.ffi_call(
-                target_name,
-                out_type,
-                input_layouts=((1, 0),),
-                output_layouts=output_layouts,
-            )(_a, T_A=T_A)
-
-            if not cyclic_1d and ndev > 1:
-                _a = undo_cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
-            return _ev, _a, status
-
-        eigenvalues, V, status = impl(a)
-        if return_status:
-            out = (eigenvalues, V[:, : a.shape[0]], status)
-        else:
-            out = (eigenvalues, V[:, : a.shape[0]])
     else:
         target_name = "syevd_no_V_mg"
         out_type = (
-            jax.ShapeDtypeStruct((a.shape[0],), maybe_real_dtype_from_complex(a.dtype)),
+            jax.ShapeDtypeStruct((N,), maybe_real_dtype_from_complex(a.dtype)),
             jax.ShapeDtypeStruct((1,), jnp.int32),
         )
-        out_specs = (P(), P(axis_name))
         output_layouts = ((0,), (0,))
+        out_specs = (P(None), P(None))
 
-        @partial(
-            jax.shard_map,
-            mesh=mesh,
-            in_specs=in_specs,
-            out_specs=out_specs,
-            check_vma=False,
-        )
-        def impl(_a):
-            if not cyclic_1d and ndev > 1:
-                _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
+    ffi_fn = partial(
+        jax.ffi.ffi_call(
+            target_name,
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+            input_output_aliases={0: 1} if return_eigenvectors else None,
+        ),
+        T_A=T_A,
+    )
 
-            _ev, status = jax.ffi.ffi_call(
-                target_name,
-                out_type,
-                input_layouts=((1, 0),),
-                output_layouts=output_layouts,
-            )(_a, T_A=T_A)
-            return _ev, status
-
-        eigenvalues, status = impl(a)
-        if return_status:
-            out = (eigenvalues, status)
+    @partial(jax.jit, donate_argnums=0)
+    @partial(
+        jax.shard_map,
+        mesh=mesh,
+        in_specs=in_specs,
+        out_specs=out_specs,
+        check_vma=False,
+    )
+    def impl(_a):
+        return ffi_fn(_a)
+    
+    def fn(_a):
+        _a = pad_fn(_a)
+        if target_name == "syevd_mg":
+            _ev, _V, _status = impl(_a)
+            return _ev, unpad_fn(_V), _status
         else:
-            out = eigenvalues
-    return out
+            _ev, _status = impl(_a)
+            return _ev, _status
+
+    out = fn(a)
+    if return_status:
+        status = out[-1]
+        return *out[:-1], status[0]
+    else:
+        if len(out) == 3:
+            return out[:-1]
+        else:
+            return out[0]

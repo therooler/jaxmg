@@ -12,12 +12,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
 
-from .utils import get_mesh_and_spec_from_array
-
 import ctypes
-
-import importlib
-import pathlib
 
 SHARED_LIBRARY_CYCLIC = os.path.join(os.path.dirname(__file__), "bin/libcyclic.so")
 library_cyclic = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_CYCLIC)
@@ -120,36 +115,9 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
     shard_size = N_rows // ndev
 
     input_layouts = ((0, 1),)
-    output_layouts = ((0, 1),)
 
     # Calculate padding
     padding = calculate_padding(shard_size, T_A)
-    out_type = (jax.ShapeDtypeStruct((shard_size + padding, N), a.dtype),)
-
-    # Prepare ffi call
-    ffi_fn = partial(
-        jax.ffi.ffi_call(
-            "cyclic_mg",
-            out_type,
-            input_layouts=input_layouts,
-            output_layouts=output_layouts,
-            input_output_aliases={0: 0},  # Crucial for buffer sharing
-        ),
-        T_A=T_A,
-    )
-
-    # Jit with donate_argnums=0 is crucial for buffer sharing
-    @partial(jax.jit, donate_argnums=0)
-    @partial(
-        jax.shard_map,
-        mesh=mesh,
-        in_specs=P(axis_name, None),
-        out_specs=P(axis_name, None),
-        check_vma=True,
-    )
-    def impl(_a):
-        (_a,) = ffi_fn(_a)
-        return _a
 
     if not pad or padding == 0:
         assert (
@@ -157,8 +125,9 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
         ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
         f"Expected {N + ndev * padding} rows, but received {N_rows}"
 
-        def fn(_a):
-            return impl(_a)
+        pad_fn = lambda _a: _a
+        unpad_fn = lambda _a: _a
+        padding = 0
 
     else:
         # Make padding fns
@@ -177,10 +146,38 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
             check_vma=True,
         )
 
-        def fn(_a):
-            _a = pad_fn(_a)
-            _a = impl(_a)
-            return unpad_fn(_a)
+    out_type = (jax.ShapeDtypeStruct((shard_size + padding, N), a.dtype),)
+    output_layouts = ((0, 1),)
+    out_specs = P(axis_name, None)
+    # Prepare ffi call
+    ffi_fn = partial(
+        jax.ffi.ffi_call(
+            "cyclic_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+            input_output_aliases={0: 0},  # Crucial for buffer sharing
+        ),
+        T_A=T_A,
+    )
+
+    # Jit with donate_argnums=0 is crucial for buffer sharing
+    @partial(jax.jit, donate_argnums=0)
+    @partial(
+        jax.shard_map,
+        mesh=mesh,
+        in_specs=P(axis_name, None),
+        out_specs=out_specs,
+        check_vma=True,
+    )
+    def impl(_a):
+        (_a,) = ffi_fn(_a)
+        return _a
+
+    def fn(_a):
+        _a = pad_fn(_a)
+        _a = impl(_a)
+        return unpad_fn(_a)
 
     return fn(a)
 

@@ -141,9 +141,8 @@ def potrs(
                 N_rows == N + ndev * padding
             ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
             f"Expected {N + ndev * padding} rows, but received {N_rows}"
-
-        def fn(_a, _b):
-            return impl(_a, _b)
+        # Identity padding
+        pad_fn = lambda _a: _a
 
     else:
         # Make padding fns
@@ -154,18 +153,11 @@ def potrs(
             out_specs=P(axis_name, None),
             check_vma=True,
         )
-        unpad_fn = jax.shard_map(
-            partial(unpad_rows, padding=padding),
-            mesh=mesh,
-            in_specs=P(axis_name, None),
-            out_specs=P(axis_name, None),
-            check_vma=True,
-        )
 
-        def fn(_a, _b):
-            _a = pad_fn(_a)
-            _out, _status = impl(_a, _b)
-            return _out, _status
+    def fn(_a, _b):
+        _a = pad_fn(_a)
+        _out, _status = impl(_a, _b)
+        return _out, _status
 
     out, status = fn(a, b)
     if return_status:
