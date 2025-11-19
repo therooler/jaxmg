@@ -190,17 +190,15 @@ namespace jax
             }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
-            memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
-                                         /* input */
-                                         array_data_A, lda,
-                                         /* output */
-                                         N,           /* number of columns of global A */
-                                         T_A,         /* number of columns per column tile */
-                                         lda,         /* leading dimension of local A */
-                                         array_data_A /* device pointer for shard on device */
-            );
             shmA[currentDevice] = array_data_A;
+            sync_point.arrive_and_wait();
+            if (currentDevice == 0)
+            {
+                memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                             N, batch_a, T_A,
+                                             /* input */
+                                             shmA, false);
+            }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
@@ -278,8 +276,17 @@ namespace jax
 
             if (cusolver_status_host[currentDevice] == 0)
             {
-                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(
-                    array_data_V, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice));
+                // Unshard
+                array_data_V = shmA[currentDevice];
+                // JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(
+                // array_data_V, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice));
+                if (currentDevice == 0)
+                {
+                    memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                                 N, batch_a, T_A,
+                                                 /* input */
+                                                 shmA, true);
+                }
             }
             else
             {
@@ -319,8 +326,8 @@ namespace jax
         {
             auto dataType = a.element_type();
 
-            // Columns are batched
-            FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
+            // Rows are batched
+            FFI_ASSIGN_OR_RETURN((const auto [batch_a, N]), SplitBatch1D(a.dimensions()));
 
             if ((dataType != V->element_type()))
             {

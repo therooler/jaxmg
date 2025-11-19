@@ -133,15 +133,10 @@ namespace jax
             const int lda = N; // leading dimension of local A
             /* CUDA */
             cudaDataType compute_type = traits<data_type>::cuda_data_type; // Data type for computation
-            cudaLibMgMatrixDesc_t descrA;                                  // CusolverMg matrix descriptors
-            cudaLibMgMatrixDesc_t descrB;
-            cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
-            cudaLibMgGrid_t gridB;
-            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR; // Column major a la Scalapack
-            cusolverMgHandle_t cusolverH = nullptr;                             // cusolverHPool.get();
-            int info = 0;                                                       // Info used by cusolverMg calls
-            cusolverStatus_t cusolver_status;                                   // Return status of cusolverMg calls
-            int64_t lwork_potrf = 0;                                            // Workspace size used by cusolverMg calls
+
+            int info = 0;                     // Info used by cusolverMg calls
+            cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
+            int64_t lwork_potrf = 0;          // Workspace size used by cusolverMg calls
             int64_t lwork_potrs = 0;
 
             /* Shared memory */
@@ -164,25 +159,10 @@ namespace jax
 
             if (currentDevice == 0)
             {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreate(&cusolverH));
                 for (int j = 0; j < nbGpus; j++)
                 {
                     deviceList[j] = j;
-                    cudaDeviceProp prop;
-                    CUDA_CHECK_OR_RETURN(cudaGetDeviceProperties(&prop, j));
                 }
-
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgDeviceSelect(cusolverH, nbGpus, deviceList.data()));
-
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridA, 1, nbGpus, deviceList.data(), mapping));
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateDeviceGrid(&gridB, 1, nbGpus, deviceList.data(), mapping));
-
-                /* (global) A is N-by-N */
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgCreateMatrixDesc(&descrA, N, /* number of rows of (global) A */
-                                                                    N,          /* number of columns of (global) A */
-                                                                    N,          /* number or rows in a tile */
-                                                                    T_A,        /* number of columns in a tile */
-                                                                    compute_type, gridA));
             }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
@@ -207,36 +187,13 @@ namespace jax
                 memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
                                              N, batch_a, T_A,
                                              /* input */
-                                             shmA);
+                                             shmA, false);
             }
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-
-            if (currentDevice == 0)
-            {
-                CUSOLVER_CHECK_OR_RETURN(cusolverMgPotrf_bufferSize(cusolverH, CUBLAS_FILL_MODE_LOWER, N,
-                                                                    //   reinterpret_cast<void **>(array_d_A.data()), IA, /* base-1 */
-                                                                    reinterpret_cast<void **>(shmA), 1, /* base-1 */
-                                                                    1,                                  /* base-1 */
-                                                                    descrA, compute_type, &lwork_potrf));
-                for (int dev = 0; dev < nbGpus; dev++)
-                {
-                    shmlwork[dev] = lwork_potrf;
-                }
-            }
-
-            sync_point.arrive_and_wait();
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-
-            /* array_d_work[j] points to device workspace of device j */
-            FFI_ASSIGN_OR_RETURN(auto workspace, AllocateWorkspaceBytes<data_type>(scratch, sizeof(data_type) * (shmlwork[currentDevice]), "workspace_potrf"));
-            shmwork[currentDevice] = workspace;
 
             /* sync all devices */
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
             if (g_cusolver_utils_verbose)
             {
                 std::vector<typename traits<data_type>::T> host(N * batch_a);

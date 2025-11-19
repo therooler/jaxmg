@@ -227,9 +227,9 @@ namespace jax
             if (currentDevice == 0)
             {
                 memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
-                                             N, batch_a, T_A,
-                                             /* input */
-                                             shmA);
+                                                      N, batch_a, T_A,
+                                                      /* input */
+                                                      shmA, false);
             }
             // // asign B on every device, even though solution will only be on device 0
             // memcpyShard<data_type>(nbGpus, N, NRHS,
