@@ -131,14 +131,14 @@ namespace jax
             const int lda = N;                            // leading dimension of local A
 
             /* CUDA */
-            cudaDataType compute_type = traits<data_type>::cuda_data_type;              // Data type for computation
-            cudaLibMgMatrixDesc_t descrA;                                               // CusolverMg matrix descriptors
-            cudaLibMgGrid_t gridA;                                                      // CusolverMg grid descriptors
-            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
+            cudaDataType compute_type = traits<data_type>::cuda_data_type;      // Data type for computation
+            cudaLibMgMatrixDesc_t descrA;                                       // CusolverMg matrix descriptors
+            cudaLibMgGrid_t gridA;                                              // CusolverMg grid descriptors
+            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR; // Column major a la Scalapack
             // FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
-            cusolverMgHandle_t cusolverH = nullptr ; //cusolverHPool.get();
-            int info = 0;                     // Info used by cusolverMg calls
-            cusolverStatus_t cusolver_status; // Return status of cusolverMg calls
+            cusolverMgHandle_t cusolverH = nullptr;  // cusolverHPool.get();
+            int info = 0;                            // Info used by cusolverMg calls
+            cusolverStatus_t cusolver_status;        // Return status of cusolverMg calls
             auto status_data = status->typed_data(); // Status returned by potri
             int64_t lwork_potrf = 0;                 // Workspace size used by cusolverMg calls
             int64_t lwork_potri = 0;
@@ -182,20 +182,17 @@ namespace jax
                                                                     T_A,        /* number of columns in a tile */
                                                                     compute_type, gridA));
             }
-           
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
 
-            memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
-                                         /* input */
-                                         array_data_A, lda,
-                                         /* output */
-                                         N,           /* number of columns of global A */
-                                         T_A,         /* number of columns per column tile */
-                                         lda,         /* leading dimension of local A */
-                                         array_data_A /* device pointer for shard on device */
-            );
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             shmA[currentDevice] = array_data_A;
+            sync_point.arrive_and_wait();
+            if (currentDevice == 0)
+            {
+                memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                             N, batch_a, T_A,
+                                             /* input */
+                                             shmA, false);
+            }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
@@ -284,7 +281,15 @@ namespace jax
 
             if (cusolver_status_host[currentDevice] == 0)
             {
-                JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice));
+                // JAX_FFI_RETURN_IF_GPU_ERROR(gpuMemcpy(out_data, shmA[currentDevice], a.size_bytes(), gpuMemcpyDeviceToDevice));
+                out_data = shmA[currentDevice];
+                if (currentDevice == 0)
+                {
+                    memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                                 N, batch_a, T_A,
+                                                 /* input */
+                                                 shmA, true);
+                }
             }
             else
             {
@@ -305,7 +310,6 @@ namespace jax
                 sharedMemoryCleanup(&shminfowork, "shmwork");
                 sharedMemoryCleanup(&shminfolwork, "shmcsh");
                 sharedMemoryCleanup(&shmcsh, "shmlwork");
-                
             }
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
@@ -319,8 +323,8 @@ namespace jax
         {
             auto dataType = a.element_type();
 
-            // Columns are batched
-            FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
+            // Rows are batched
+            FFI_ASSIGN_OR_RETURN((const auto [batch_a, N]), SplitBatch1D(a.dimensions()));
 
             if (dataType != out->element_type())
             {
