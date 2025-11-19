@@ -29,6 +29,73 @@ jax.ffi.register_ffi_target(
 
 
 def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
+    """
+    Perform a 1D cyclic multigrid operation on the row dimension of a 2D array using
+    a custom XLA FFI kernel ("cyclic_mg") executed under jax.jit + jax.shard_map.
+
+    This function prepares per-device padding (if required), arranges a jax.ffi
+    custom-call with the expected input/output layouts, and runs the kernel while
+    preserving the array's sharding. When padding is enabled (pad=True) the input
+    is padded on each device to match the FFI kernel's required local tile size,
+    the kernel is executed, and the extra rows are removed before returning. The
+    call is JIT-compiled with donate_argnums=0 so the input buffer may be donated
+    to the custom-call for buffer sharing / zero-copy semantics.
+
+    Parameters
+    ----------
+    a : Array
+        A 2D JAX array with shape (N_rows, N). The array must be sharded across
+        devices by rows according to `in_specs` (see below).
+    T_A : int
+        A tile / transfer size parameter used to compute per-device padding and to
+        select the behavior of the underlying FFI kernel.
+    mesh : Mesh
+        The jax.experimental.pjit / shard_map mesh object describing device layout.
+    in_specs : PartitionSpec or 1-element list/tuple of PartitionSpec
+        Partitioning specification for the input array. Must be a single
+        PartitionSpec (or a single-element container). The function expects the
+        array to be sharded along rows (i.e. a PartitionSpec of the form
+        PartitionSpec(<row_axis>, None) such as P("x", None)).
+    pad : bool, optional (default True)
+        If True, per-device padding will be applied so that each device's local
+        tile size satisfies the kernel requirement; padding is removed before
+        returning. If False, the function asserts that the input already has the
+        correct size and will not perform implicit padding.
+
+    Returns
+    -------
+    Array
+        A 2D JAX array with the same logical shape and dtype as the input (padding
+        removed if pad=True). The returned array is sharded in the same way as the
+        input (in_specs / out_specs are set to the same PartitionSpec).
+
+    Raises
+    ------
+    TypeError
+        If `in_specs` is not a PartitionSpec or a 1-element list/tuple containing a
+        PartitionSpec.
+    ValueError
+        If `in_specs` is provided as an iterable with length != 1, or if the
+        provided PartitionSpec does not indicate row sharding (i.e. not of the
+        expected form P(row, None)).
+    AssertionError
+        If `a` is not 2D, or if pad=False but the input shape does not match the
+        kernel's expected (non-padded) layout (a runtime assertion will fail).
+
+    Notes
+    -----
+    - The implementation uses jax.ffi.ffi_call to invoke a custom XLA kernel named
+      "cyclic_mg". The FFI call and surrounding jax.jit/shard_map are configured to
+      allow input/output buffer aliasing (donation) for performance.
+    - Because donate_argnums=0 is used, the input buffer may be donated to the
+      kernel; after the call the input should be treated as having been consumed by
+      the operation semantics of the custom call.
+    - This function relies on a helper calculate_padding(shard_size, T_A) to
+      compute required per-device padding, as well as pad_rows/unpad_rows helpers
+      when pad=True.
+    - The function expects the number of devices in the mesh to evenly partition
+      the first (row) dimension (local shard size is computed as N_rows // ndev).
+    """
 
     ndev = jax.local_device_count()
     # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
