@@ -177,8 +177,7 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
 
     def fn(_a):
         _a = pad_fn(_a)
-        _a = impl(_a)
-        return unpad_fn(_a)
+        return impl(_a)
 
     return fn(a)
 
@@ -224,9 +223,9 @@ def get_cols_cyclic(N, N_batch, T_A, num_devices):
 
 def verify_cyclic(A, A_cyclic, T_A):
     ndev = jax.device_count()
-    N, N = A.shape[0]
+    N = A.shape[0]
     shard_size = N // ndev
-    padding = calculate_padding(shard_size, T_A, ndev=ndev)
+    padding = calculate_padding(shard_size, T_A)
     N_batch = shard_size + padding
     col_list = get_cols_cyclic(N, N_batch, T_A, ndev)
     A_array = np.array(A)
