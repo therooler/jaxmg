@@ -71,7 +71,7 @@ inline bool g_cusolver_utils_verbose = []()
 }();
 
 // Returns an unordered_map mapping global_col_src -> (global_col_dst, visited=false)
-std::unordered_map<int, std::pair<int, bool>> get_col_maps(int N, int N_batch, int T_A, int num_devices)
+std::unordered_map<int, std::pair<int, bool>> get_col_maps(int N, int N_batch, int T_A, int num_devices, bool reverse)
 {
     std::unordered_map<int, std::pair<int, bool>> col_map;
 
@@ -95,15 +95,29 @@ std::unordered_map<int, std::pair<int, bool>> get_col_maps(int N, int N_batch, i
         int num_offsets = col / shard_size;
         int global_col_src = col + offset * num_offsets;
         int global_col_dst = dst_cols[dst_dev] + dst_dev * N_batch;
-        col_map[global_col_src] = std::make_pair(global_col_dst, false);
+        if (reverse)
+            col_map[global_col_dst] = std::make_pair(global_col_src, false);
+        else
+            col_map[global_col_src] = std::make_pair(global_col_dst, false);
+
         int src_dev = global_col_src / N_batch;
         if (g_cusolver_utils_verbose)
-            std::printf("src_dev %d, dst_dev %d, src=%d, dst=%d, visited=%s\n",
-                        src_dev,
-                        dst_dev,
-                        global_col_src,
-                        col_map[global_col_src].first,
-                        col_map[global_col_src].second ? "true" : "false");
+        {
+            if (reverse)
+                std::printf("src_dev %d, dst_dev %d, src=%d, dst=%d, visited=%s\n",
+                            src_dev,
+                            dst_dev,
+                            global_col_src,
+                            col_map[global_col_dst].first,
+                            col_map[global_col_dst].second ? "true" : "false");
+            else
+                std::printf("src_dev %d, dst_dev %d, src=%d, dst=%d, visited=%s\n",
+                            src_dev,
+                            dst_dev,
+                            global_col_src,
+                            col_map[global_col_src].first,
+                            col_map[global_col_src].second ? "true" : "false");
+        }
         dst_cols[dst_dev] += 1;
     }
     return col_map;
@@ -229,7 +243,8 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
                               int N_batch,                                               /* number of columns in local A, B */
                               int T_A,                                                   /* number of columns per column tile */
                               /* input */
-                              T_ELEM **array_d_A /* array of device array, array_d_A is N-by-N_batch with leading dimension LLD_A  */
+                              T_ELEM **array_d_A, /* array of device array, array_d_A is N-by-N_batch with leading dimension LLD_A  */
+                              bool reverse
 )
 {
     if (num_devices < 2)
@@ -246,7 +261,7 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
     CUDA_CHECK(cudaDeviceSynchronize());
 
     // Get tiles
-    std::unordered_map<int, std::pair<int, bool>> col_map = get_col_maps(N, N_batch, T_A, num_devices);
+    std::unordered_map<int, std::pair<int, bool>> col_map = get_col_maps(N, N_batch, T_A, num_devices, reverse);
     // Get permutation cycles
     std::unordered_map<int, std::vector<int>> cycles = get_cycles(col_map);
     if (g_cusolver_utils_verbose)
@@ -353,6 +368,7 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
     // Restore original device
     CUDA_CHECK(cudaSetDevice(currentDev));
     CUDA_CHECK(cudaDeviceSynchronize());
+    return ;
 }
 
 // type traits
