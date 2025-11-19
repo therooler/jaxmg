@@ -23,7 +23,7 @@ ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
 
 # Test cases
-N_list = list(i * ndev for i in [1, 3, 4, 10])
+N_list = list(i * ndev for i in [2, 3, 4, 10])
 T_A_list = [1, 2, 3, 5]
 
 
