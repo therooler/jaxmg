@@ -35,12 +35,6 @@ def maybe_real_dtype_from_complex(dtype):
         else (jnp.float64 if dtype == jnp.complex128 else dtype)
     )
 
-
-def symmetrize(_a):
-    _a = jnp.tril(_a)
-    return _a + _a.T.conj() - jnp.diag(jnp.diag(_a))
-
-
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""
 

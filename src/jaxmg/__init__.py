@@ -60,13 +60,21 @@ if any("gpu" == d.platform for d in jax.devices()):
         )
     if mode == "SPMD":
         # Load the shared libraries
-        SHARED_LIBRARY_POTRS = os.path.join(os.path.dirname(__file__), "bin/libpotrs.so")
+        SHARED_LIBRARY_POTRS = os.path.join(
+            os.path.dirname(__file__), "bin/libpotrs.so"
+        )
         library_potrs = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_POTRS)
-        SHARED_LIBRARY_POTRI = os.path.join(os.path.dirname(__file__), "bin/libpotri.so")
+        SHARED_LIBRARY_POTRI = os.path.join(
+            os.path.dirname(__file__), "bin/libpotri.so"
+        )
         library_potri = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_POTRI)
-        SHARED_LIBRARY_SYEVD = os.path.join(os.path.dirname(__file__), "bin/libsyevd.so")
+        SHARED_LIBRARY_SYEVD = os.path.join(
+            os.path.dirname(__file__), "bin/libsyevd.so"
+        )
         library_syevd = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_SYEVD)
-        SHARED_LIBRARY_SYEVD_NO_V = os.path.join(os.path.dirname(__file__), "bin/libsyevd_no_V.so")
+        SHARED_LIBRARY_SYEVD_NO_V = os.path.join(
+            os.path.dirname(__file__), "bin/libsyevd_no_V.so"
+        )
         library_syevd_no_V = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_SYEVD_NO_V)
         # Register FFI targets
         jax.ffi.register_ffi_target(
@@ -79,21 +87,27 @@ if any("gpu" == d.platform for d in jax.devices()):
             "syevd_mg", jax.ffi.pycapsule(library_syevd.SyevdMgFFI), platform="CUDA"
         )
         jax.ffi.register_ffi_target(
-            "syevd_no_V_mg", jax.ffi.pycapsule(library_syevd_no_V.SyevdMgFFI), platform="CUDA"
+            "syevd_no_V_mg",
+            jax.ffi.pycapsule(library_syevd_no_V.SyevdMgFFI),
+            platform="CUDA",
         )
         from ._potrs import potrs, potrs_no_shardmap
         from ._potri import potri
         from ._syevd import syevd
     else:
         # Load the shared library
-        SHARED_LIBRARY_POTRS_MP = os.path.join(os.path.dirname(__file__), "bin/libpotrs_mp.so")
+        SHARED_LIBRARY_POTRS_MP = os.path.join(
+            os.path.dirname(__file__), "bin/libpotrs_mp.so"
+        )
         library_potrs_mp = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_POTRS_MP)
         # Register FFI targets
         jax.ffi.register_ffi_target(
-            "potrs_mp_mg", jax.ffi.pycapsule(library_potrs_mp.PotrsMgMpFFI), platform="CUDA"
+            "potrs_mp_mg",
+            jax.ffi.pycapsule(library_potrs_mp.PotrsMgMpFFI),
+            platform="CUDA",
         )
         from ._potrs_mp import potrs, potrs_no_shardmap
-        
+
 else:
     warnings.warn(
         f"No GPUs found, only use this mode for testing or docs.",
@@ -101,6 +115,7 @@ else:
         stacklevel=2,
     )
     from ._potrs import potrs, potrs_no_shardmap
+
     from ._potri import potri
     from ._syevd import syevd
     from ._potrs_mp import potrs, potrs_no_shardmap
@@ -108,26 +123,24 @@ else:
     os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(jax.device_count())
 
 from ._cyclic_1d import (
-    cyclic_1d_no_shardmap,
-    cyclic_1d_layout,
-    undo_cyclic_1d_layout,
-    manual_cyclic_1d_layout,
+    cyclic_1d,
     calculate_padding,
-    calculate_valid_T_A,
-    calculate_all_valid_T_A,
+    pad_rows,
+    unpad_rows,
+    verify_cyclic,
+    get_cols_cyclic,
 )
 
 __all__ = [
-    "_potrs",
+    "potrs",
     "potrs_no_shardmap",
-    "_potri",
-    "_syevd",
-    "cyclic_1d_layout",
-    "cyclic_1d_no_shardmap",
-    "undo_cyclic_1d_layout",
-    "manual_cyclic_1d_layout",
+    "potri",
+    "syevd",
+    "cyclic_1d",
+    "pad_rows",
+    "unpad_rows",
+    "verify_cyclic",
     "calculate_padding",
-    "calculate_valid_T_A",
-    "calculate_all_valid_T_A",
+    "get_cols_cyclic",
     "determine_distributed_setup",
 ]

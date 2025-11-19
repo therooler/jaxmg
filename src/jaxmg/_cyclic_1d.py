@@ -119,11 +119,12 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
     # Calculate padding
     padding = calculate_padding(shard_size, T_A)
 
-    if not pad or padding == 0:
-        assert (
-            N_rows != N + ndev * padding
-        ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
-        f"Expected {N + ndev * padding} rows, but received {N_rows}"
+    if not pad or padding == 0 or T_A >= N // ndev:
+        if T_A < N // ndev:
+            assert (
+                N_rows == N + ndev * padding
+            ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
+            f"Expected {N + ndev * padding} rows, but received {N_rows}"
 
         pad_fn = lambda _a: _a
         unpad_fn = lambda _a: _a
