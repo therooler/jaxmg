@@ -114,8 +114,9 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
             "A must be sharded along the rows with PartitionSpec P(str, None)."
         )
     assert a.ndim == 2, "a must be a 2D array."
+    axis_name = in_specs._partitions[0]
     N_rows, N = a.shape
-    ndev = jax.device_count()
+
     shard_size = N_rows // ndev
 
     input_layouts = ((0, 1),)
@@ -142,8 +143,8 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
     @partial(
         jax.shard_map,
         mesh=mesh,
-        in_specs=P("x", None),
-        out_specs=P("x", None),
+        in_specs=P(axis_name, None),
+        out_specs=P(axis_name, None),
         check_vma=True,
     )
     def impl(_a):
@@ -164,15 +165,15 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
         pad_fn = jax.shard_map(
             partial(pad_rows, padding=padding),
             mesh=mesh,
-            in_specs=P("x", None),
-            out_specs=P("x", None),
+            in_specs=P(axis_name, None),
+            out_specs=P(axis_name, None),
             check_vma=True,
         )
         unpad_fn = jax.shard_map(
             partial(unpad_rows, padding=padding),
             mesh=mesh,
-            in_specs=P("x", None),
-            out_specs=P("x", None),
+            in_specs=P(axis_name, None),
+            out_specs=P(axis_name, None),
             check_vma=True,
         )
 
@@ -185,7 +186,9 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
 
 
 def pad_rows(_a: Array, padding: int):
-    _a = jax.lax.pad(_a, 0.0, ((0, padding, 0), (0, 0, 0)))
+    _a = jax.lax.pad(
+        _a, jax.lax.convert_element_type(0.0, _a.dtype), ((0, padding, 0), (0, 0, 0))
+    )
     return _a
 
 
