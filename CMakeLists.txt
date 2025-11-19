@@ -91,6 +91,13 @@ endif()
 # Set JAX_GPU_CUDA to 1 (this is required for jaxlib to compile correctly)
 add_definitions(-DJAX_GPU_CUDA=1)
 # Add libraries
+add_library(cyclic SHARED
+    src/cuda/cyclic.cu
+    src/cuda/utils/jax_utils.cc
+    src/cuda/utils/shm.cc
+    ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
+)
+
 add_library(potrs SHARED
     src/cuda/potrs.cu
     src/cuda/utils/jax_utils.cc
@@ -127,6 +134,7 @@ add_library(syevd_no_V SHARED
 # Make sure we can see "thirdparty/gpus" and jax
 set(SRC_CUDA_INCLUDE ${CMAKE_SOURCE_DIR}/src/cuda/include)
 set(SRC_CUDA_ROOT ${CMAKE_SOURCE_DIR}/src/cuda)
+target_include_directories(cyclic PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${SRC_CUDA_INCLUDE} ${SRC_CUDA_ROOT})
 target_include_directories(potrs PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${SRC_CUDA_INCLUDE} ${SRC_CUDA_ROOT})
 target_include_directories(potrs_mp PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${SRC_CUDA_INCLUDE} ${SRC_CUDA_ROOT})
 target_include_directories(potri PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${SRC_CUDA_INCLUDE} ${SRC_CUDA_ROOT})
@@ -134,6 +142,9 @@ target_include_directories(syevd PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${
 target_include_directories(syevd_no_V PUBLIC ${CMAKE_SOURCE_DIR} ${jax_SOURCE_DIR} ${SRC_CUDA_INCLUDE} ${SRC_CUDA_ROOT})
 
 # Set the CUDA architecture
+set_target_properties(cyclic PROPERTIES
+    CUDA_ARCHITECTURES "all"
+)
 set_target_properties(potrs PROPERTIES
     CUDA_ARCHITECTURES "all"
 )
@@ -151,6 +162,15 @@ set_target_properties(syevd_no_V PROPERTIES
 )
 
 # Link against CUDA libraries and absl
+target_link_libraries(cyclic
+    absl::strings
+    absl::status
+    absl::statusor
+    CUDA::cusolver
+    CUDA::cupti
+    ${CUSOLVERMG_LIB}
+    cuda
+)
 target_link_libraries(potrs
     absl::strings
     absl::status
@@ -199,6 +219,9 @@ target_link_libraries(syevd_no_V
     cuda
 )
 # Make install targets
+install(TARGETS cyclic
+    LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
+)
 install(TARGETS potrs
     LIBRARY DESTINATION ${CMAKE_SOURCE_DIR}/src/jaxmg/bin
 )
@@ -219,6 +242,7 @@ install(TARGETS syevd_no_V
 # cmake ..
 # cmake --build . --target install
 # OR
+# cmake --build . --target cyclic && cmake --install .
 # cmake --build . --target potrs_mp && cmake --install .
 # cmake --build . --target potrs && cmake --install .
 # cmake --build . --target potri && cmake --install .

@@ -1,9 +1,10 @@
 import numpy as np
-
+import os
 import jax
 import jax.numpy as jnp
+from jax.sharding import Mesh, PartitionSpec as P
 from jax import Array
-from typing import Tuple
+from typing import Tuple, List
 
 from functools import partial
 
@@ -13,336 +14,163 @@ from matplotlib.patches import Patch
 
 from .utils import get_mesh_and_spec_from_array
 
+import ctypes
 
-def cyclic_1d_no_shardmap(x_block: Array, T_A: int, ndev: int, axis_name: str) -> Array:
-    """Convert a per-device column-sharded block into a 1D block-cyclic layout.
+import importlib
+import pathlib
 
-    Forward steps (conceptual):
-      1) Compute padding so (shard_size + padding) is a multiple of ndev * T_A.
-      2) Shift leftmost chunks across devices with ppermute (i -> i-1) to ensure unique tile ownership.
-      3) Reshape/transpose into (dev, blocks, tile), then all_to_all across ``axis_name``.
-      4) Drop the extra padding so width == ceil(shard_size, T_A).
+SHARED_LIBRARY_CYCLIC = os.path.join(os.path.dirname(__file__), "bin/libcyclic.so")
+library_cyclic = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_CYCLIC)
 
-    Args:
-        x_block: Array
-            Local columns on this device with shape ``(N, shard_size)``.
-        T_A: int
-            Tile width.
-        ndev: int
-            Number of devices along ``axis_name``.
-        axis_name: str
-            Mesh axis name.
-
-    Returns:
-        Array
-            Local block-cyclic shard with shape ``(N, need)`` where ``need`` is
-            ``shard_size`` rounded up to a multiple of ``T_A``.
-    """
-    N, shard_size = x_block.shape  # input is (N, N // ndev), columns
-
-    # If the tile size is larger than the shard the matrix is already in 1D block cyclic form
-    if T_A >= shard_size:
-        return x_block
-
-    if shard_size < ndev:
-        raise ValueError(
-            f"We require shard_size >= ndev, but received shard_size = {shard_size} with {ndev} devices."
-        )
-    # To ensure unique tile ownership per device we need to pad the matrices
-    # with zeros and shift the columns over the devices. The target is therefore
-    # A matrix that is a multiple of T_A * ndev
-    padding = calculate_padding(shard_size, T_A, ndev)
-    # the left-shift we need should not exceed shard_size on the last device.
-    validate_padding(padding, ndev, shard_size, T_A)
-    # Calculate new padding and padding we actually need
-    shard_size_padded = shard_size + padding
-    need = shard_size + (T_A - (shard_size % T_A)) % T_A
-    # We can shift the matrices to the right by shifting the leftmost columns
-    # to the previous GPU, so cols 1:padding get shifted to gpu(i)->gpu(i-1)
-    # We handle the last gpu specifically and pad the back with zeros.
-    width = ndev * padding
-    if width:
-        dev_nr = jax.lax.axis_index(axis_name)
-
-        x_left_chunk = jax.lax.cond(
-            dev_nr == 0,
-            lambda x: get_chunk_gpu_zero(x, width, axis_name),
-            lambda x: get_chunk_gpu_left(x, width, axis_name),
-            x_block,
-        )
-        # Circulate: i -> i-1 (mod ndev)
-        x_left_chunk = jax.lax.ppermute(
-            x=x_left_chunk,
-            axis_name=axis_name,
-            perm=[(i, (i - 1) % ndev) for i in range(ndev)],
-        )
-        # On each device, splice the received chunk to the left and trim the tail.
-        branches = tuple(
-            partial(concat_chunk_gpus_left, padding=padding, dev=i) for i in range(ndev)
-        )
-        x_block = jax.lax.switch(dev_nr, branches, x_block, x_left_chunk)
-
-    # -------- Tile exchange via all_to_all --------
-    # Reshape to (N, blocks, ndev, T_A) → transpose to (N, ndev, blocks, T_A)
-    # shard_cols is guaranteed multiple of ndev*T_A by your padding
-    blocks = shard_size_padded // (ndev * T_A)
-    x = x_block.reshape(N, blocks, ndev, T_A)  # (N, blocks, dev, tile)
-    x = jnp.transpose(x, (0, 2, 1, 3))  # (N, dev, blocks, tile)
-    x = jnp.reshape(x, (N, ndev, blocks * T_A))  # Collapse (blocks, T_A)
-
-    # Exchange tiles across devices
-    x = jax.lax.all_to_all(
-        x, axis_name=axis_name, split_axis=1, concat_axis=1, tiled=False
-    )  # (N, ndev, blocks*T_A)
-
-    # Back to (N, shard_size_padded)
-    x_block = jnp.reshape(x, (N, shard_size_padded))
-
-    return x_block[:, :need]
+# Register FFI targets
+jax.ffi.register_ffi_target(
+    "cyclic_mg", jax.ffi.pycapsule(library_cyclic.CyclicMgFFI), platform="CUDA"
+)
 
 
-def undo_cyclic_1d_no_shardmap(x_block_bc: Array, T_A: int, ndev: int, axis_name: str) -> Array:
-    """
-    Inverse of _make_block_cyclic:
-      x_block_bc: per-device block-cyclic local shard, shape (N, need)
-      T_A       : tile size used in forward pass
-      ndev      : number of devices on mesh axis `axis_name`
-    Returns a per-device column-sharded block of shape (N, shard_size) on each device.
-    """
+def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
 
-    N, need = x_block_bc.shape
-    if T_A >= need:
-        return x_block_bc
-
-    target_shard_size = N // ndev
-    padding = calculate_padding(target_shard_size, T_A, ndev)
-    extra = calculate_padding(need, T_A, ndev)
-
-    if extra:
-        x_block_bc = jnp.pad(x_block_bc, ((0, 0), (0, extra)))
-        need += extra
-
-    # -------- Inverse of tile exchange --------
-    blocks = need // (ndev * T_A)
-    x = x_block_bc.reshape(N, ndev, blocks * T_A)
-    x = jax.lax.all_to_all(x, axis_name=axis_name, split_axis=1, concat_axis=1)
-    x = x.reshape(N, ndev, blocks, T_A)
-    x = jnp.transpose(x, (0, 2, 1, 3))  # (N, blocks, ndev, T_A)
-    x = x.reshape(N, blocks * ndev * T_A)
-
-    # -------- Inverse of shift --------
-    width = ndev * padding
-    if width and ndev > 1:
-        dev_nr = jax.lax.axis_index(axis_name)
-
-        # take the rightmost width columns (inverse of leftmost in forward)
-        x_right_chunk = jax.lax.cond(
-            dev_nr == ndev - 1,
-            lambda x: get_chunk_gpu_zero(x, width, axis_name),
-            lambda x: get_chunk_gpu_right(x, width, axis_name),
-            x,
-        )
-        # inverse perm: i -> i+1
-        x_right_chunk = jax.lax.ppermute(
-            x_right_chunk,
-            axis_name=axis_name,
-            perm=[(i, (i + 1) % ndev) for i in range(ndev)],
-        )
-
-        # On each device, splice the concat chunk to the right and trim the tail.
-        branches = tuple(
-            partial(concat_chunk_gpus_right, padding=padding, dev=i)
-            for i in range(ndev)
-        )
-        x = jax.lax.switch(dev_nr, branches, x, x_right_chunk)
-
-    # finally trim back down to the true shard_size
-    return x[:, :target_shard_size]
-
-
-def validate_padding(padding: int, ndev: int, shard_size: int, T_A: int) -> None:
-    if (ndev - 1) * padding > shard_size:
-        N = ndev * shard_size
-        new_T_A_min, new_T_A_max = calculate_valid_T_A(
-            shard_size, T_A, ndev, T_A_max=shard_size
-        )
-        suggested_padding_str_max = f"Smallest {T_A} < T_A <= shard_size that would result in ndev * padding <= shard_size: T_A = {new_T_A_max}."
-        if new_T_A_min > 0:
-            suggested_padding_str = f"Largest 0 < T_A < {T_A} that would result in ndev * padding <= shard_size: T_A = {new_T_A_min}."
-            suggested_padding_str = (
-                suggested_padding_str + "\n" + suggested_padding_str_max
+    ndev = jax.local_device_count()
+    # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
+    if isinstance(in_specs, (list, tuple)):
+        if len(in_specs) != 1:
+            raise ValueError(
+                "in_specs must be a single PartitionSpec or a 1-element list/tuple."
             )
-        else:
-            suggested_padding_str = suggested_padding_str_max
-
+        in_specs = in_specs[0]
+    if not isinstance(in_specs, P):
+        raise TypeError(
+            "in_specs must be a PartitionSpec or a 1-element list/tuple containing one."
+        )
+    if (in_specs._partitions[1] != None) or (in_specs._partitions[0] == None):
         raise ValueError(
-            "Attempting 1d cylic relayout with:\n"
-            f"\t- N = {N}\n"
-            f"\t- shard_size = {shard_size}\n"
-            f"\t- ndev = {ndev}\n"
-            f"\t- T_A = {T_A}\n"
-            "In order to use an all-to-all call to remap the matrix, we would need to add zero padding of\n"
-            f"\t- padding: {padding}\n"
-            f"This would require a shift of the last matrix of (ndev - 1) * padding = {(ndev-1) * padding} cols,"
-            f"which is larger than the shard_size {shard_size}.\n"
-            f"{suggested_padding_str}\n"
-            f"Use `calculate_valid_T_A` to calculate a valid T_A for 1d cyclic resharding."
+            "A must be sharded along the rows with PartitionSpec P(str, None)."
+        )
+    assert a.ndim == 2, "a must be a 2D array."
+    N_rows, N = a.shape
+    ndev = jax.device_count()
+    shard_size = N_rows // ndev
+
+    input_layouts = ((0, 1),)
+    output_layouts = ((0, 1),)
+
+    # Calculate padding
+    padding = calculate_padding(shard_size, T_A)
+    out_type = (jax.ShapeDtypeStruct((shard_size + padding, N), a.dtype),)
+
+    # Prepare ffi call
+    ffi_fn = partial(
+        jax.ffi.ffi_call(
+            "cyclic_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+            input_output_aliases={0: 0},  # Crucial for buffer sharing
+        ),
+        T_A=T_A,
+    )
+
+    # Jit with donate_argnums=0 is crucial for buffer sharing
+    @partial(jax.jit, donate_argnums=0)
+    @partial(
+        jax.shard_map,
+        mesh=mesh,
+        in_specs=P("x", None),
+        out_specs=P("x", None),
+        check_vma=True,
+    )
+    def impl(_a):
+        (_a,) = ffi_fn(_a)
+        return _a
+
+    if not pad or padding == 0:
+        assert (
+            N_rows != N + ndev * padding
+        ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
+        f"Expected {N + ndev * padding} rows, but received {N_rows}"
+
+        def fn(_a):
+            return impl(_a)
+
+    else:
+        # Make padding fns
+        pad_fn = jax.shard_map(
+            partial(pad_rows, padding=padding),
+            mesh=mesh,
+            in_specs=P("x", None),
+            out_specs=P("x", None),
+            check_vma=True,
+        )
+        unpad_fn = jax.shard_map(
+            partial(unpad_rows, padding=padding),
+            mesh=mesh,
+            in_specs=P("x", None),
+            out_specs=P("x", None),
+            check_vma=True,
         )
 
+        def fn(_a):
+            _a = pad_fn(_a)
+            _a = impl(_a)
+            return unpad_fn(_a)
 
-def calculate_padding(shard_size: int, T_A: int, ndev: int) -> int:
+    return fn(a)
+
+
+def pad_rows(_a: Array, padding: int):
+    _a = jax.lax.pad(_a, 0.0, ((0, padding, 0), (0, 0, 0)))
+    return _a
+
+
+def unpad_rows(_a: Array, padding: int):
+    _a = _a[:-padding, :]
+    return _a
+
+
+def calculate_padding(shard_size: int, T_A: int) -> int:
     """Return number of padding columns required so ``shard_size + padding`` is a multiple of ``T_A * ndev``."""
-    target = T_A * ndev
-    padding = (-shard_size) % target
-    return padding
+    return (-shard_size) % T_A
 
 
-def calculate_valid_T_A(shard_size: int, T_A: int, ndev: int, T_A_max: int) -> Tuple[int, int]:
-    new_T_A_min = T_A
-    new_T_A_max = T_A
-    while new_T_A_min > 0:
-        suggested_padding = calculate_padding(shard_size, new_T_A_min, ndev)
-        if (ndev - 1) * suggested_padding <= shard_size:
-            break
-        new_T_A_min -= 1
-    while new_T_A_max < T_A_max:
-        suggested_padding = calculate_padding(shard_size, new_T_A_max, ndev)
-        if (ndev - 1) * suggested_padding <= shard_size:
-            break
-        new_T_A_max += 1
+def get_cols_cyclic(N, N_batch, T_A, num_devices):
+    col_list = []
+    shard_size = N // num_devices
+    dst_cols = [0] * num_devices
+    dst_dev = -1
+    offset = N_batch - N // num_devices
+    for col in range(N):
 
-    return new_T_A_min, new_T_A_max
+        if col % T_A == 0:
+            dst_dev = (dst_dev + 1) % num_devices
+        num_offsets = col // shard_size
 
-def calculate_all_valid_T_A(shard_size: int, ndev: int, T_A_max: int) -> list:
-    """Return a list of valid ``T_A`` values for the given shard and device count."""
-    suggested_T_A = []
-    new_T_A_min = 1
-    while new_T_A_min < T_A_max:
-        suggested_padding = calculate_padding(shard_size, new_T_A_min, ndev)
-        if (ndev - 1) * suggested_padding <= shard_size:
-            suggested_T_A.append(new_T_A_min)
-        new_T_A_min += 1
-
-    return suggested_T_A
-
-def get_chunk_gpu_zero(x_block: Array, padding: int, axis_name: str) -> Array:
-    N = x_block.shape[0]
-    # Create zero chunk, use pvary to add sharding axis
-    chunk = jnp.zeros((N, padding), dtype=x_block.dtype)
-    return jax.lax.pvary(chunk, axis_name=axis_name)
+        global_col_src = col + offset * num_offsets
+        global_col_dst = dst_cols[dst_dev] + dst_dev * N_batch
+        col_list.append((col, global_col_src, global_col_dst))
+        # print(
+        #     f"src={global_col_src}, dst={global_col_dst}"
+        # )
+        dst_cols[dst_dev] += 1
+    return col_list
 
 
-def get_chunk_gpu_left(x_block: Array, padding: int, axis_name: str) -> Array:
-    # Get the first 1:padding columns
-    N, shard_size = x_block.shape
-    if padding > shard_size:
-        # Create zero chunk, use pvary to add sharding axis
-        chunk = jnp.zeros((N, padding - shard_size), dtype=x_block.dtype)
-        chunk_p = jax.lax.pvary(chunk, axis_name=axis_name)
-        return jnp.concatenate([x_block, chunk_p], axis=1)
-    else:
-        return x_block[:, :padding]
+def verify_cyclic(A, A_cyclic, T_A):
+    ndev = jax.device_count()
+    N, N = A.shape[0]
+    shard_size = N // ndev
+    padding = calculate_padding(shard_size, T_A, ndev=ndev)
+    N_batch = shard_size + padding
+    col_list = get_cols_cyclic(N, N_batch, T_A, ndev)
+    A_array = np.array(A)
+    A_cyclic_array = np.array(A_cyclic)
+    for col in col_list:
+        number, _, dst = col
+        assert np.allclose(A_array[number, :], A_cyclic_array[dst, :])
 
 
-def get_chunk_gpu_right(x_block: Array, padding: int, axis_name: str) -> Array:
-    # Get the first 1:padding columns
-    N, shard_size = x_block.shape
-    if padding > shard_size:
-        # Create zero chunk, use pvary to add sharding axis
-        chunk = jnp.zeros((N, padding - shard_size), dtype=x_block.dtype)
-        chunk_p = jax.lax.pvary(chunk, axis_name=axis_name)
-        return jnp.concatenate([chunk_p, x_block], axis=1)
-    else:
-        return x_block[:, -padding:]
-
-
-def concat_chunk_gpus_left(x_block: Array, x_left_chunk: Array, padding: int, dev: int) -> Array:
-    # Add columns from next gpu to the right
-    x_block = jnp.concatenate(
-        [x_block[:, dev * padding :], x_left_chunk[:, : (dev + 1) * padding]], axis=1
-    )
-    return x_block[:, : x_block.shape[1] + padding]
-
-
-def concat_chunk_gpus_right(
-    x_block: Array, x_right_chunk: Array, padding: int, dev: int
-) -> Array:
-    # Add columns from next gpu to the right
-    x_block = jnp.concatenate(
-        [
-            x_right_chunk[:, x_right_chunk.shape[1] - (dev * padding) :],
-            x_block[:, : x_block.shape[1] - (dev * padding)],
-        ],
-        axis=1,
-    )
-    return x_block[:, : x_block.shape[1] + padding]
-
-
-def cyclic_1d_layout(a: Array, T_A: int) -> Array:
-    """Perform block cyclic relayout"""
-    mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    return jax.shard_map(
-        partial(
-            cyclic_1d_no_shardmap,
-            T_A=T_A,
-            ndev=len(mesh_a.devices),
-            axis_name=spec_a._partitions[1],
-        ),
-        mesh=mesh_a,
-        in_specs=spec_a,
-        out_specs=spec_a,
-    )(a)
-
-
-def undo_cyclic_1d_layout(a: Array, T_A: int) -> Array:
-    """Undo block cyclic relayout"""
-    mesh_a, spec_a = get_mesh_and_spec_from_array(a)
-    return jax.shard_map(
-        partial(
-            undo_cyclic_1d_no_shardmap,
-            T_A=T_A,
-            ndev=len(mesh_a.devices),
-            axis_name=spec_a._partitions[1],
-        ),
-        mesh=mesh_a,
-        in_specs=spec_a,
-        out_specs=spec_a,
-    )(a)
-
-
-def manual_cyclic_1d_layout(a: Array, T_A: int, ndev: int) -> Array:
-    N, M = a.shape  # input is (N, N // ndev), columns
-    shard_size = M // ndev
-    if shard_size < ndev:
-        raise ValueError(
-            f"We require shard_size >= ndev, but received shard_size = {shard_size} with {ndev} devices."
-        )
-    # If the tile size is larger than the shard the matrix is already in 1D block cyclic form
-    if T_A >= shard_size:
-        return a
-    else:
-        # To ensure unique tile ownership per device we need to pad the matrices
-        # with zeros and shift the columns over the devices. The target is therefore
-        # A matrix that is a multiple of T_A * ndev
-        shard_size_padded_necessary = shard_size + (T_A - (shard_size % T_A)) % T_A
-        shards = [jnp.zeros((N, shard_size_padded_necessary))] * ndev
-        mod_dev = 0
-        i = [0] * ndev
-        for tile_start in range(0, N, T_A):
-            dev = mod_dev % ndev
-            tile_end = min(tile_start + T_A, N)
-            tile = a[:, tile_start:tile_end]
-            shards[dev] = (
-                shards[dev]
-                .at[:, i[dev] * T_A : i[dev] * T_A + (tile_end - tile_start)]
-                .set(tile)
-            )
-            mod_dev += 1
-            i[dev] += 1
-        return jnp.concatenate([shards[dev] for dev in range(ndev)], axis=1)
-
-
-def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8) -> Tuple[plt.Figure, np.ndarray]:
+def plot_block_to_cyclic(
+    N: int, T_A: int, ndev: int, N_rows: int = 8
+) -> Tuple[plt.Figure, np.ndarray]:
     """Visualize global column ownership (by device id) before and after converting
     column-block sharding to 1D block-cyclic with tile size ``T_A`` across ``ndev`` devices.
 
@@ -377,7 +205,7 @@ def plot_block_to_cyclic(N: int, T_A: int, ndev: int, N_rows: int = 8) -> Tuple[
     # After: 1D block-cyclic by tiles; pad to multiple of T_A
 
     pad = calculate_padding(shard_size, T_A, ndev)
-    validate_padding(pad, ndev, shard_size, T_A)
+
     total_cols_padded = total_cols + pad * ndev
     before = np.ones((N_rows, total_cols_padded), dtype=int) * ndev
     # before = np.ones((N_rows, total_cols), dtype=int)
