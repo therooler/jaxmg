@@ -165,8 +165,10 @@ std::unordered_map<int, std::vector<int>> get_cycles(
                 if (dst_it->second.first == key)
                 {
                     if (g_cusolver_utils_verbose)
-                        printf("dst=%d == key=%d\n, breaking", dst, key);
+                        printf("dst=%d == key=%d, breaking\n", dst, key);
                     cycle.push_back(dst);
+                    col_map[dst].second = true;
+                    cycle.push_back(dst_it->second.first);
                     break;
                 }
                 // Case 2: We hit a column that we've visited before
@@ -247,7 +249,8 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
     std::unordered_map<int, std::pair<int, bool>> col_map = get_col_maps(N, N_batch, T_A, num_devices);
     // Get permutation cycles
     std::unordered_map<int, std::vector<int>> cycles = get_cycles(col_map);
-    std::printf("Permutation cycles (count=%zu):\n", cycles.size());
+    if (g_cusolver_utils_verbose)
+        std::printf("Permutation cycles (count=%zu):\n", cycles.size());
     if (g_cusolver_utils_verbose)
     {
         for (const auto &entry : cycles)

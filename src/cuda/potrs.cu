@@ -150,7 +150,7 @@ namespace jax
             cudaLibMgMatrixDesc_t descrB;
             cudaLibMgGrid_t gridA; // CusolverMg grid descriptors
             cudaLibMgGrid_t gridB;
-            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR;         // Column major a la Scalapack
+            cusolverMgGridMapping_t mapping = CUDALIBMG_GRID_MAPPING_COL_MAJOR; // Column major a la Scalapack
             // FFI_ASSIGN_OR_RETURN(auto cusolverHPool, SolverHandlePool::Borrow(stream)); // Assign a cusolver handle from the pool
             cusolverMgHandle_t cusolverH = nullptr;  // cusolverHPool.get();
             int info = 0;                            // Info used by cusolverMg calls
@@ -210,30 +210,48 @@ namespace jax
             }
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
-            memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
-                                         /* input */
-                                         array_data_A, lda,
-                                         /* output */
-                                         N,           /* number of columns of global A */
-                                         T_A,         /* number of columns per column tile */
-                                         lda,         /* leading dimension of local A */
-                                         array_data_A /* device pointer for shard on device */
-            );
             shmA[currentDevice] = array_data_A;
-            // asign B on every device, even though solution will only be on device 0
-            memcpyShard<data_type>(nbGpus, N, NRHS,
-                                   /* input */
-                                   array_data_b, ldb,
-                                   /* output */
-                                   1,           /* number of columns of global A */
-                                   ldb,         /* leading dimension of local A */
-                                   array_data_b /* device pointer for shard on device */
-            );
-            shmB[currentDevice] = array_data_b;
-
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            if (g_cusolver_utils_verbose)
+            {
+                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                sync_point.arrive_and_wait();
+                std::vector<typename traits<data_type>::T> host(N * batch_a);
+                size_t numBytes = sizeof(data_type) * N * batch_a;
+                CUDA_CHECK_OR_RETURN(cudaMemcpy(host.data(), shmA[currentDevice], numBytes, cudaMemcpyDeviceToHost));
+                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                printf("Dev %d\n", currentDevice);
+                print_matrix(N, batch_a, host.data(), N);
+            }
             sync_point.arrive_and_wait();
+
+            if (currentDevice == 0)
+            {
+                memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                             N, batch_a, T_A,
+                                             /* input */
+                                             shmA);
+            }
+            // // asign B on every device, even though solution will only be on device 0
+            // memcpyShard<data_type>(nbGpus, N, NRHS,
+            //                        /* input */
+            //                        array_data_b, ldb,
+            //                        /* output */
+            //                        1,           /* number of columns of global A */
+            //                        ldb,         /* leading dimension of local A */
+            //                        array_data_b /* device pointer for shard on device */
+            // );
+            shmB[currentDevice] = array_data_b;
+            if (g_cusolver_utils_verbose)
+            {
+                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                sync_point.arrive_and_wait();
+                std::vector<typename traits<data_type>::T> host(N * batch_a);
+                size_t numBytes = sizeof(data_type) * N * batch_a;
+                CUDA_CHECK_OR_RETURN(cudaMemcpy(host.data(), shmA[currentDevice], numBytes, cudaMemcpyDeviceToHost));
+                CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+                printf("Dev %d\n", currentDevice);
+                print_matrix(N, batch_a, host.data(), N);
+            }
 
             if (currentDevice == 0)
             {
@@ -370,8 +388,8 @@ namespace jax
         {
             auto dataType = a.element_type();
 
-            // Columns are batched
-            FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
+            // Rows are batched
+            FFI_ASSIGN_OR_RETURN((const auto [batch_a, N]), SplitBatch1D(a.dimensions()));
             FFI_ASSIGN_OR_RETURN((const auto [N_b, NRHS]), SplitBatch1D(b.dimensions()));
             FFI_RETURN_IF_ERROR(CheckShape(b.dimensions(), {N, NRHS}, "b", "potrf"));
 
