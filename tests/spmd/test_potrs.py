@@ -18,9 +18,11 @@ from functools import partial
 
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
+mesh = jax.make_mesh((ndev,), ("x",))
+
+# Test cases
 N_list = list(i * ndev for i in [1, 3, 4, 10])
 T_A_list = [1, 2, 3, 5]
-mesh = jax.make_mesh((ndev,), ("x",))
 
 
 def cusolver_solve_arange(N, T_A, dtype):
