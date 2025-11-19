@@ -1,7 +1,7 @@
 import socket
 import os
 import hashlib
-
+import warnings
 import jax
 import jax.numpy as jnp
 from jax.sharding import NamedSharding
@@ -55,9 +55,12 @@ def determine_distributed_setup():
     # print(unique_ids)
     num_machines = len(unique_ids)
     # print(all_ids)
-    print("calling determine")
-    cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
-    n_visisble_devices = len(cuda_visible_devices.split(","))
+    try:
+        cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
+        n_visisble_devices = len(cuda_visible_devices.split(","))
+    except KeyError:
+        warnings.warn(JaxMgWarning("GPU(s) detected by jax but CUDA_VISIBLE_DEVICES is not set. "))
+        n_visisble_devices = len(list(filter(lambda d: d.platform=='gpu', jax.devices())))
     n_devices = jax.device_count()
     n_devices_per_machine = n_devices // num_machines
     n_devices_per_process = n_devices // n_proc
