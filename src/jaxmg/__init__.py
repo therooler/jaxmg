@@ -113,7 +113,7 @@ if any("gpu" == d.platform for d in jax.devices()):
             platform="CUDA",
         )
     from ._potrs import potrs, potrs_shardmap_ctx
-    from ._potri import potri
+    from ._potri import potri, potri_shardmap_ctx, potri_symmetrize
     from ._syevd import syevd, syevd_shardmap_ctx
 
 else:
@@ -123,7 +123,7 @@ else:
         stacklevel=2,
     )
     from ._potrs import potrs, potrs_shardmap_ctx
-    from ._potri import potri
+    from ._potri import potri, potri_shardmap_ctx, potri_symmetrize
     from ._syevd import syevd, syevd_shardmap_ctx
 
     os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(jax.device_count())
@@ -141,8 +141,10 @@ __all__ = [
     "potrs",
     "potrs_shardmap_ctx",
     "potri",
+    "potri_shardmap_ctx",
     "syevd",
     "syevd_shardmap_ctx",
+    "potri_symmetrize",
     "cyclic_1d",
     "pad_rows",
     "unpad_rows",

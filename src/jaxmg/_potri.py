@@ -157,14 +157,116 @@ def potri(
         return unpad_fn(_a), _status
 
     out, status = fn(a)
-    out = symmetrize(out)
+    out = potri_symmetrize(out)
     if return_status:
         return out, status[0]
     else:
         return out
 
 
+def potri_shardmap_ctx(a: Array, T_A: int, pad=True) -> Union[Array, Tuple[Array, int]]:
+    """Compute the inverse of a symmetric matrix for already-sharded inputs.
+
+    This helper is a lower-level variant of :func:`potri` intended for
+    environments where the caller already manages sharding/device placement
+    (for example inside a custom ``shard_map`` or other placement context).
+    It performs the same per-device padding logic driven by ``T_A`` and calls
+    the native ``potri_mg`` FFI target directly via ``jax.ffi.ffi_call``.
+
+    Warning:
+        On exit, we return the upper triangular part of ``A_inv``.
+        To achive the full inverse, call ``jaxmg.potri_symmetrize`` outside of
+        the shardmap_context.
+
+    Args:
+        a (Array): Local, row-sharded slice of the global matrix with shape
+            ``(shard_size, N)`` where ``shard_size`` is the per-device local
+            row count and ``N`` is the global matrix dimension. The matrix
+            should be symmetric.
+        T_A (int): Tile width used by the native solver; used to compute any
+            per-device padding so local tile sizes are compatible with the
+            native kernel.
+        pad (bool, optional): If True (default) apply per-device padding to
+            ``a`` to satisfy ``T_A``. If False the caller must ensure the
+            provided local shape already meets kernel requirements.
+
+    Returns:
+        tuple: ``(A_inv, status)`` where ``A_inv`` contains the the upper triangular part
+            of the inverted matrix (in  the same local/sharded layout as the input,
+            with padding removed if applied) and ``status`` is
+            the int32 status value returned by the native kernel
+            (shape ``(1,)`` device array).
+
+    Raises:
+        AssertionError: If ``a`` is not 2D.
+        ValueError: If ``T_A`` is too large or shape requirements are violated
+            when ``pad=False``.
+
+    Notes:
+        - This function does not create an outer ``jax.shard_map`` or apply
+          ``donate_argnums``; it is intended for use when the caller already
+          controls sharding and device placement.
+        - Padding is handled with :func:`calculate_padding`, :func:`pad_rows`,
+          and :func:`unpad_rows`.
+        - If the native solver fails the output may contain NaNs and the
+          returned ``status`` will be non-zero.
+    """
+
+    ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
+    # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
+
+    assert a.ndim == 2, "a must be a 2D array."
+    shard_size, N = a.shape
+
+    input_layouts = ((0, 1),)
+
+    # Calculate padding
+    padding = calculate_padding(shard_size, T_A)
+
+    if not pad or padding == 0 or T_A >= N // ndev:
+        if T_A < N // ndev:
+            assert (
+                shard_size == (N + ndev * padding) // ndev
+            ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
+            f"Expected {N + ndev * padding} rows, but received {shard_size}"
+
+        pad_fn = lambda _a: _a
+        unpad_fn = lambda _a: _a
+        padding = 0
+
+    else:
+        # Make padding fns
+        pad_fn = partial(pad_rows, padding=padding)
+        unpad_fn = partial(unpad_rows, padding=padding)
+
+    out_type = (
+        jax.ShapeDtypeStruct((shard_size + padding, N), a.dtype),
+        jax.ShapeDtypeStruct((1,), jnp.int32),
+    )
+    output_layouts = ((0, 1), (0,))
+
+    # Prepare ffi call
+    ffi_fn = partial(
+        jax.ffi.ffi_call(
+            "potri_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+            input_output_aliases={0: 0},  # Crucial for buffer sharing
+        ),
+        T_A=T_A,
+    )
+
+    def fn(_a):
+        _a = pad_fn(_a)
+        _a, _status = ffi_fn(_a)
+        return unpad_fn(_a), _status
+
+    out, status = fn(a)
+    return out, status
+
+
 @partial(jax.jit, donate_argnums=0)
-def symmetrize(_a):
+def potri_symmetrize(_a):
     _a = jnp.triu(_a)
     return _a + _a.T.conj() - jnp.diag(jnp.diag(_a))

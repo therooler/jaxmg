@@ -12,7 +12,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
 import pytest
-from jaxmg import potri
+from jaxmg import potri, potri_shardmap_ctx, potri_symmetrize
 from jaxmg.utils import random_psd
 from functools import partial
 
@@ -24,16 +24,43 @@ N_list = list(i * ndev for i in [2, 3, 4, 10])
 T_A_list = [1, 2, 3, 5]
 
 
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potri(_a, _T_A):
+    out = partial(potri, mesh=mesh, in_specs=(P("x", None),), pad=True)(_a, _T_A)
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potri_status(_a, _T_A):
+    out, status = partial(
+        potri, mesh=mesh, in_specs=(P("x", None),), pad=True, return_status=True
+    )(_a, _T_A)
+    return out, status
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potri_no_shardmap(_a, _T_A):
+    out, status = jax.shard_map(
+        partial(potri_shardmap_ctx, T_A=_T_A),
+        mesh=mesh,
+        in_specs=(P("x", None),),
+        out_specs=(P("x", None), P(None)),
+        check_vma=False,
+    )(_a)
+    return out, status
+
+
 def cusolver_solve_arange(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
 
-    out = jax.jit(
-        partial(potri, mesh=mesh, in_specs=(P("x", None),)), static_argnums=1
-    )(A, T_A=T_A)
+    out = jitted_potri(_A.copy(), T_A)
     expected_out = jnp.diag(1.0 / (jnp.arange(N, dtype=dtype) + 1))
     assert jnp.allclose(out, expected_out)
+    expected_out_no_shm, _ = jitted_potri_no_shardmap(_A, T_A)
+    expected_out_no_shm = potri_symmetrize(expected_out_no_shm)
+    assert jnp.allclose(out, expected_out_no_shm)
 
 
 def cusolver_solve_psd(N, T_A, dtype):
@@ -41,23 +68,24 @@ def cusolver_solve_psd(N, T_A, dtype):
     expected_out = jnp.linalg.inv(A)
     # Make mesh and place data
     _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    out = jax.jit(
-        partial(potri, mesh=mesh, in_specs=(P("x", None),)), static_argnums=1
-    )(_A, T_A=T_A)
+    out = jitted_potri(_A, T_A)
     assert jnp.allclose(A.conj().T, A)
     norm_potri = jnp.linalg.norm(A @ out - jnp.eye(N, dtype=dtype))
     norm_lax = jnp.linalg.norm(A @ expected_out - jnp.eye(N, dtype=dtype))
     assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=0.0)
+    expected_out_no_shm, _ = jitted_potri_no_shardmap(_A, T_A)
+    expected_out_no_shm = potri_symmetrize(expected_out_no_shm)
+    norm_potri_no_shm = jnp.linalg.norm(
+        A @ expected_out_no_shm - jnp.eye(N, dtype=dtype)
+    )
+    assert jnp.allclose(norm_potri_no_shm, norm_lax, rtol=10, atol=0.0)
 
 
 def cusolver_solve_non_psd(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) - 1)
     # Make mesh and place data
     _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    out, status = jax.jit(
-        partial(potri, mesh=mesh, in_specs=(P("x", None),), return_status=True),
-        static_argnums=1,
-    )(_A, T_A=T_A)
+    out, status = jitted_potri_status(_A, T_A)
     status.block_until_ready()
     out.block_until_ready()
     assert status == 7
@@ -67,13 +95,10 @@ def cusolver_solve_non_psd(N, T_A, dtype):
 def cusolver_solve_non_symm(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     # TODO: For some reason the solver does not fail when we set this to 1.0.
-    A = A.at[0,1].set(2.0)
+    A = A.at[0, 1].set(2.0)
     # Make mesh and place data
     _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    out, status = jax.jit(
-        partial(potri, mesh=mesh, in_specs=(P("x", None),), return_status=True),
-        static_argnums=1,
-    )(_A, T_A=T_A)
+    out, status = jitted_potri_status(_A, T_A)
     status.block_until_ready()
     out.block_until_ready()
     assert status == 7
