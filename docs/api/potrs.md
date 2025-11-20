@@ -2,4 +2,4 @@
 
 ::: jaxmg._potrs.potrs
 
-::: jaxmg._potrs.potrs_no_shardmap
+::: jaxmg._potrs.potrs_shardmap_ctx

@@ -112,9 +112,9 @@ if any("gpu" == d.platform for d in jax.devices()):
             jax.ffi.pycapsule(library_potrs_mp.PotrsMgMpFFI),
             platform="CUDA",
         )
-    from ._potrs import potrs, potrs_no_shardmap
+    from ._potrs import potrs, potrs_shardmap_ctx
     from ._potri import potri
-    from ._syevd import syevd
+    from ._syevd import syevd, syevd_shardmap_ctx
 
 else:
     warnings.warn(
@@ -122,9 +122,9 @@ else:
         JaxMgWarning,
         stacklevel=2,
     )
-    from ._potrs import potrs, potrs_no_shardmap
+    from ._potrs import potrs, potrs_shardmap_ctx
     from ._potri import potri
-    from ._syevd import syevd
+    from ._syevd import syevd, syevd_shardmap_ctx
 
     os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(jax.device_count())
 
@@ -139,9 +139,10 @@ from ._cyclic_1d import (
 
 __all__ = [
     "potrs",
-    "potrs_no_shardmap",
+    "potrs_shardmap_ctx",
     "potri",
     "syevd",
+    "syevd_shardmap_ctx",
     "cyclic_1d",
     "pad_rows",
     "unpad_rows",
