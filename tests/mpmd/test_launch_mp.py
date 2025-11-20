@@ -30,7 +30,7 @@ def _gpu_count_from_env() -> int:
 
 
 @pytest.mark.multi_gpu
-@pytest.mark.parametrize("requested_procs", (1, 2, 4))
+@pytest.mark.parametrize("requested_procs", (1, 2, 3, 4))
 def test_launch_mpmd_collect_results(requested_procs):
     """
     Launch mp_test.py with two processes on localhost and assert both complete.

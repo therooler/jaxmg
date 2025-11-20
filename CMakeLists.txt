@@ -104,7 +104,6 @@ add_library(potrs SHARED
     src/cuda/utils/shm.cc
     ${jax_SOURCE_DIR}/jaxlib/gpu/gpu_kernel_helpers.cc
 )
-
 add_library(potrs_mp SHARED
     src/cuda/potrs_mp.cu
     src/cuda/utils/jax_utils.cc
