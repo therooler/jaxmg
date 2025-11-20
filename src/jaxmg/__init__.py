@@ -91,9 +91,7 @@ if any("gpu" == d.platform for d in jax.devices()):
             jax.ffi.pycapsule(library_syevd_no_V.SyevdMgFFI),
             platform="CUDA",
         )
-        from ._potrs import potrs, potrs_no_shardmap
-        from ._potri import potri
-        from ._syevd import syevd
+        
     else:
         # Load the shared library
         SHARED_LIBRARY_POTRS_MP = os.path.join(
@@ -102,11 +100,13 @@ if any("gpu" == d.platform for d in jax.devices()):
         library_potrs_mp = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_POTRS_MP)
         # Register FFI targets
         jax.ffi.register_ffi_target(
-            "potrs_mp_mg",
+            "potrs_mg",
             jax.ffi.pycapsule(library_potrs_mp.PotrsMgMpFFI),
             platform="CUDA",
         )
-        from ._potrs_mp import potrs, potrs_no_shardmap
+    from ._potrs import potrs, potrs_no_shardmap
+    from ._potri import potri
+    from ._syevd import syevd
 
 else:
     warnings.warn(
@@ -115,10 +115,8 @@ else:
         stacklevel=2,
     )
     from ._potrs import potrs, potrs_no_shardmap
-
     from ._potri import potri
     from ._syevd import syevd
-    from ._potrs_mp import potrs, potrs_no_shardmap
 
     os.environ["JAXMG_NUMBER_OF_DEVICES"] = str(jax.device_count())
 

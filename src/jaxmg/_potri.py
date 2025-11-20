@@ -56,7 +56,7 @@ def potri(
         ValueError: If the input array does not have the correct sharding.
     """
 
-    ndev = jax.local_device_count()
+    ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
     # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
     if isinstance(in_specs, (list, tuple)):
         if len(in_specs) != 1:

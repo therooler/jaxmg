@@ -71,7 +71,7 @@ def syevd(
         AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
         ValueError: If the input array does not have the correct sharding or if T_A > 1024.
     """
-    ndev = jax.local_device_count()
+    ndev =int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
     # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
     if isinstance(in_specs, (list, tuple)):
         if len(in_specs) != 1:

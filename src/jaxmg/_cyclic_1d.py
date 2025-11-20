@@ -92,7 +92,7 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
       the first (row) dimension (local shard size is computed as N_rows // ndev).
     """
 
-    ndev = jax.local_device_count()
+    ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
     # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)
     if isinstance(in_specs, (list, tuple)):
         if len(in_specs) != 1:

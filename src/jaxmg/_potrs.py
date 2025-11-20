@@ -9,16 +9,7 @@ from jax.sharding import PartitionSpec as P, Mesh
 from typing import Tuple, List, Union
 from functools import partial
 
-from ._cyclic_1d import calculate_padding, pad_rows, unpad_rows
-
-SHARED_LIBRARY_POTRS = os.path.join(os.path.dirname(__file__), "bin/libpotrs.so")
-library_potrs = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_POTRS)
-
-# Register FFI targets
-jax.ffi.register_ffi_target(
-    "potrs_mg", jax.ffi.pycapsule(library_potrs.PotrsMgFFI), platform="CUDA"
-)
-
+from ._cyclic_1d import calculate_padding, pad_rows
 
 def potrs(
     a: Array,
@@ -77,7 +68,7 @@ def potrs(
     - This function validates in_specs and will raise ValueError for unsupported sharding.
     """
 
-    ndev = jax.local_device_count()
+    ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
 
     assert isinstance(
         in_specs, (tuple, list)
