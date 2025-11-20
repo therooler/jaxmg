@@ -22,52 +22,45 @@ def potri(
 ) -> Union[Array, Tuple[Array, int]]:
     """Compute the inverse of a symmetric matrix using the multi-GPU potri native kernel.
 
-    This wrapper prepares inputs for the native cuSolverMg-based "potri_mg"
-    kernel and executes it via ``jax.ffi.ffi_call`` under ``jax.jit`` and
-    ``jax.shard_map``. It handles per-device padding required by the tile size
-    ``T_A`` (via :func:`calculate_padding`, :func:`pad_rows`, :func:`unpad_rows`) and
-    symmetrizes the output to recover the full matrix.
+    Prepares inputs for the native ``potri_mg`` kernel and executes it via
+    ``jax.ffi.ffi_call`` under ``jax.jit`` and ``jax.shard_map``. Handles
+    per-device padding driven by ``T_A`` and symmetrizes the result before
+    returning.
 
-    Parameters
-    ----------
-    a : Array
-        A 2D JAX array (shape ``(N_rows, N)``). The array must be symmetric and
-        is expected to be sharded across the mesh along the first (row) axis:
-        ``in_specs`` must be ``P(<axis_name>, None)``.
-    T_A : int
-        Tile width used by the native solver; determines per-device padding.
-    mesh : Mesh
-        JAX device mesh used for ``jax.shard_map``.
-    in_specs : PartitionSpec or 1-element tuple/list of PartitionSpec
-        PartitionSpec describing the input sharding (row sharding).
-    return_status : bool, optional
-        If True, return ``(A_inv, status)`` where ``status`` is a host-replicated
-        int32 returned from the native solver. If False, return ``A_inv`` only.
-    pad : bool, optional
-        If True (default) apply per-device padding to meet ``T_A`` requirements;
-        if False the caller must already supply correctly padded shapes.
+    Args:
+        a (Array): A 2D JAX array of shape ``(N_rows, N)``. Must be symmetric and
+            is expected to be sharded across the mesh along the first (row)
+            axis using ``P(<axis_name>, None)``.
+        T_A (int): Tile width used by the native solver; determines per-device
+            padding.
+        mesh (Mesh): JAX device mesh used for ``jax.shard_map``.
+        in_specs (PartitionSpec or tuple/list[PartitionSpec]): PartitionSpec
+            describing the input sharding (row sharding). May be provided as a
+            single ``PartitionSpec`` or a single-element container containing one.
+        return_status (bool, optional): If True return ``(A_inv, status)`` where
+            ``status`` is a host-replicated int32 from the native solver. If
+            False return ``A_inv`` only. Default is False.
+        pad (bool, optional): If True (default) apply per-device padding to meet
+            ``T_A`` requirements; if False the caller must supply already-
+            padded shapes.
 
-    Returns
-    -------
-    Array or (Array, int)
-        The inverted matrix (row-sharded) and, optionally, the native solver
-        status code when ``return_status=True``.
+    Returns:
+        Array or (Array, int): The inverted matrix (row-sharded). If
+            ``return_status=True`` also return the native solver status code.
 
-    Raises
-    ------
-    TypeError
-        If ``in_specs`` is not a ``PartitionSpec`` or a single-element container.
-    ValueError
-        If ``in_specs`` does not indicate row sharding ``P(<axis_name>, None)``.
-    AssertionError
-        If ``a`` is not 2D or if required shapes do not match when ``pad=False``.
+    Raises:
+        TypeError: If ``in_specs`` is not a ``PartitionSpec`` or a single-
+            element container.
+        ValueError: If ``in_specs`` does not indicate row sharding
+            (``P(<axis_name>, None)``).
+        AssertionError: If ``a`` is not 2D or if required shapes do not match
+            when ``pad=False``.
 
-    Notes
-    -----
-    - The FFI call donates the input buffer (``donate_argnums=0``) to enable
-      zero-copy buffer sharing with the native library.
-    - If the native solver fails the output may contain NaNs and ``status``
-      will be non-zero.
+    Notes:
+        - The FFI call is executed with ``donate_argnums=0`` enabling zero-copy
+          buffer sharing with the native library.
+        - If the native solver fails the output may contain NaNs and ``status``
+          will be non-zero.
     """
 
     ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])

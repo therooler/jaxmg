@@ -22,57 +22,47 @@ def potrs(
 ) -> Union[Array, Tuple[Array, int]]:
     """Solve the linear system A x = B using the multi-GPU potrs native kernel.
 
-    This wrapper readies inputs for the native "potrs_mg" kernel and executes
-    it through ``jax.ffi.ffi_call`` under ``jax.jit`` and ``jax.shard_map``. The
-    function handles per-device padding required by the tile size ``T_A`` and
-    returns the solution (and optionally a host-side solver status).
+    Prepares inputs for the native ``potrs_mg`` kernel and executes it via
+    ``jax.ffi.ffi_call`` under ``jax.jit`` and ``jax.shard_map``. Handles
+    per-device padding driven by ``T_A`` and returns the solution (and
+    optionally a host-side solver status).
 
-    Parameters
-    ----------
-    a : Array
-        2D, symmetric matrix representing the coefficient matrix. The array is
-        expected to be sharded across the mesh along the first (row) axis using
-        a single PartitionSpec: ``P(<axis_name>, None)``.
-    b : Array
-        2D right-hand side. Expected to be replicated across devices with
-        PartitionSpec ``P(None, None)``.
-    T_A : int
-        Tile size for the 1D block-cyclic layout. Determines per-device padding.
-    mesh : Mesh
-        JAX Mesh object used for ``jax.shard_map``.
-    in_specs : tuple/list of two PartitionSpec
-        The sharding specifications for ``(a, b)``. Expected to be
-        ``(P(<axis_name>, None), P(None, None))``.
-    return_status : bool, optional
-        If True, return a tuple ``(x, status)`` where ``status`` is a host-
-        replicated int32 status returned by the native solver. If False, return
-        ``x`` only.
-    pad : bool, optional
-        If True (default) apply per-device padding to ``a`` so each local shard
-        length is compatible with ``T_A``; if False the caller must ensure
-        shapes already match the kernel's requirements.
+    Args:
+        a (Array): 2D, symmetric matrix representing the coefficient matrix.
+            Expected to be sharded across the mesh along the first (row) axis
+            using a single ``PartitionSpec``: ``P(<axis_name>, None)``.
+        b (Array): 2D right-hand side. Expected to be replicated across
+            devices with ``PartitionSpec`` ``P(None, None)``.
+        T_A (int): Tile size for the 1D block-cyclic layout; determines
+            per-device padding.
+        mesh (Mesh): JAX Mesh object used for ``jax.shard_map``.
+        in_specs (tuple[list][PartitionSpec]): The sharding specifications for
+            ``(a, b)``. Expected to be ``(P(<axis_name>, None), P(None, None))``.
+        return_status (bool, optional): If True return ``(x, status)`` where
+            ``status`` is a host-replicated int32 from the native solver. If
+            False return ``x`` only. Default is False.
+        pad (bool, optional): If True (default) apply per-device padding to
+            ``a`` so each local shard length is compatible with ``T_A``; if
+            False the caller must ensure shapes already match the kernel's
+            requirements.
 
-    Returns
-    -------
-    Array or (Array, int)
-        The solution ``x`` (replicated across devices), and optionally the
-        native solver status when ``return_status=True``.
+    Returns:
+        Array or (Array, int): The solution ``x`` (replicated across devices).
+            If ``return_status=True`` also return the native solver status.
 
-    Raises
-    ------
-    AssertionError
-        If ``a`` or ``b`` are not 2D, or their shapes are incompatible.
-    ValueError
-        If ``in_specs`` is not a 2-element sequence or if the provided
-        PartitionSpec objects do not match the required patterns
-        (``P(<axis_name>, None)`` for ``a`` and ``P(None, None)`` for ``b``).
+    Raises:
+        AssertionError: If ``a`` or ``b`` are not 2D, or their shapes are
+            incompatible.
+        ValueError: If ``in_specs`` is not a 2-element sequence or if the
+            provided ``PartitionSpec`` objects do not match the required
+            patterns (``P(<axis_name>, None)`` for ``a`` and
+            ``P(None, None)`` for ``b``).
 
-    Notes
-    -----
-    - The FFI call may donate the ``a`` buffer (``donate_argnums=0``) for
-      zero-copy interaction with the native library.
-    - If the native solver fails the returned solution may contain NaNs and
-      ``status`` will be non-zero.
+    Notes:
+        - The FFI call may donate the ``a`` buffer (``donate_argnums=0``) for
+          zero-copy interaction with the native library.
+        - If the native solver fails the returned solution may contain NaNs and
+          ``status`` will be non-zero.
     """
 
     ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])

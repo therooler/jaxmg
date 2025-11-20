@@ -16,62 +16,49 @@ from matplotlib.patches import Patch
 def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
     """Prepare and run the 1D block-cyclic remapping FFI kernel for row-sharded arrays.
 
-    This helper wraps a custom XLA FFI kernel ("cyclic_mg") that converts a
-    row-sharded 2D array into the 1D block-cyclic layout expected by the native
-    multi-GPU solvers. The function handles per-device padding (to make local
-    tile sizes a multiple of ``T_A``), runs the FFI custom-call under
-    ``jax.jit`` and ``jax.shard_map`` (with ``donate_argnums=0`` for buffer
-    sharing), and removes any temporary padding before returning.
+    Converts a row-sharded 2D array into the 1D block-cyclic layout expected by
+    the native multi-GPU solvers, handling per-device padding, invocation of the
+    FFI kernel under ``jax.jit`` and ``jax.shard_map``, and removal of any
+    temporary padding.
 
-    Parameters
-    ----------
-    a : Array
-        A 2D JAX array of shape (N_rows, N). The array must be sharded across the
-        mesh along the first (row) axis using a single PartitionSpec. In other
-        words ``in_specs`` must be ``P(<axis_name>, None)``.
-    T_A : int
-        Tile width used by the native solver / remapping kernel. Determines the
-        per-device padding applied so that each device's local row count is a
-        multiple of ``T_A`` when required.
-    mesh : Mesh
-        JAX device mesh used for ``jax.shard_map``.
-    in_specs : PartitionSpec or 1-element tuple/list of PartitionSpec
-        The partitioning specification describing the input sharding. This must
-        be a single ``PartitionSpec`` (or a 1-element container) indicating row
-        sharding: ``P(<axis_name>, None)``.
-    pad : bool, optional
-        If True (default) apply per-device padding when the local shard size is
-        not a multiple of ``T_A``. If False, the caller must provide an input
-        whose shape already matches the kernel's requirements.
+    Args:
+        a (Array): A 2D JAX array of shape ``(N_rows, N)``. Must be sharded across
+            the mesh along the first (row) axis using a single ``PartitionSpec``
+            (i.e. ``P(<axis_name>, None)``).
+        T_A (int): Tile width used by the native solver / remapping kernel. Used
+            to compute per-device padding so each local shard length is a
+            multiple of ``T_A`` when required.
+        mesh (Mesh): JAX device mesh used for ``jax.shard_map``.
+        in_specs (PartitionSpec or tuple/list[PartitionSpec]): Partitioning
+            specification describing the input sharding. Must be a single
+            ``PartitionSpec`` or a single-element container containing one.
+        pad (bool, optional): If True (default) apply per-device padding when the
+            local shard size is not a multiple of ``T_A``. If False the caller
+            must provide an input whose shape already meets the kernel
+            requirements.
 
-    Returns
-    -------
-    Array
-        The remapped 2D array with the same logical shape and dtype as ``a``.
-        Any temporary padding is removed before the result is returned. The
-        returned array retains the same sharding specification as the input.
+    Returns:
+        Array: The remapped 2D array with the same logical shape and dtype as
+            ``a``. Any temporary padding is removed before returning. The
+            returned array retains the same sharding specification as the input.
 
-    Raises
-    ------
-    TypeError
-        If ``in_specs`` is not a ``PartitionSpec`` or a single-element container
-        containing one.
-    ValueError
-        If ``in_specs`` does not indicate row sharding (i.e. is not
-        ``P(<axis_name>, None)``) or if a 1-element container is provided with
-        length != 1.
-    AssertionError
-        If ``a`` is not 2D or if ``pad=False`` but the provided shape does not
-        already satisfy the kernel's non-padded layout requirements.
+    Raises:
+        TypeError: If ``in_specs`` is not a ``PartitionSpec`` or a single-element
+            container containing one.
+        ValueError: If ``in_specs`` does not indicate row sharding (i.e.
+            ``P(<axis_name>, None)``) or if a container is provided with length
+            != 1.
+        AssertionError: If ``a`` is not 2D or if ``pad=False`` but the provided
+            shape does not satisfy the kernel's non-padded layout requirements.
 
-    Notes
-    -----
-    - The FFI call is executed with ``donate_argnums=0`` so the input buffer
-      may be donated to the native kernel for zero-copy performance.
-    - Padding calculation is performed with :func:`calculate_padding` and the
-      helpers :func:`pad_rows` / :func:`unpad_rows` are used when ``pad=True``.
-    - The function assumes the mesh/device count evenly partitions the first
-      (row) dimension; local shard size is computed as ``N_rows // ndev``.
+    Notes:
+        - The FFI call is executed with ``donate_argnums=0`` so the input buffer
+          may be donated to the native kernel for zero-copy performance.
+        - Padding calculation is performed with :func:`calculate_padding` and
+          the helpers :func:`pad_rows` / :func:`unpad_rows` are used when
+          ``pad=True``.
+        - The function assumes the mesh/device count evenly partitions the
+          first (row) dimension; local shard size is computed as ``N_rows // ndev``.
     """
 
     ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
