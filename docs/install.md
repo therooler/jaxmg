@@ -7,7 +7,7 @@ pip install ".[cuda]"
 
 This will install a GPU compatible version of JAX. 
 
-To verify the installation (requires at least one GPU):
+To verify the installation (requires at least one GPU) run
 
 ```bash
 pytest 
