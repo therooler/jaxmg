@@ -4,7 +4,7 @@ import jax
 
 from jax.sharding import Mesh, PartitionSpec as P
 from jax import Array
-from typing import Tuple, List
+from typing import Tuple, List, Union
 
 from functools import partial
 
@@ -13,8 +13,9 @@ from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
 
 
-def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
-    """Prepare and run the 1D block-cyclic remapping FFI kernel for row-sharded arrays.
+def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True)-> Union[Array, Tuple[Array, int]]:
+    """
+    Prepare and run the 1D block-cyclic remapping FFI kernel for row-sharded arrays.
 
     Converts a row-sharded 2D array into the 1D block-cyclic layout expected by
     the native multi-GPU solvers, handling per-device padding, invocation of the
