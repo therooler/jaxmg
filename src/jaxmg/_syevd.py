@@ -41,35 +41,66 @@ def syevd(
     return_status: bool = False,
     pad=True,
 ) -> Union[Array, Tuple[Array, Array], Tuple[Array, Array, int], Tuple[Array, int]]:
-    """
-    Computes the eigenvalue decomposition of a symmetric matrix `a` using a distributed multi-GPU CUDA kernel via JAX FFI.
+    """Compute eigenvalues (and optionally eigenvectors) of a symmetric matrix via the multi-GPU syevd kernel.
 
-    This function calls a CusolverMg CUDA kernel to compute the eigenvalues (and optionally eigenvectors) of `a`.
-    The input matrix `a` must be 2D and symmetric. The matrix must be sharded along its columns using PartitionSpec P(None, str).
-    If `cyclic_1d` is True, the input is assumed to be sharded in a cyclic 1D layout.
+    This wrapper prepares the input and executes the appropriate native
+    cuSolverMg-based kernel (``syevd_mg`` when eigenvectors are requested or
+    ``syevd_no_V_mg`` otherwise) via ``jax.ffi.ffi_call`` under ``jax.jit`` and
+    ``jax.shard_map``. It handles per-device padding driven by the tile size
+    ``T_A`` and returns the eigenvalues and, optionally, the eigenvectors and a
+    host-side status code.
 
-    If `a` is not postive-definite, CusolverMg will fail and return an error status.
-    If `a` is not symmetric, CusolverMg will fail and return an error status.
-    In both cases, the returned result will be NaN.
+    Parameters
+    ----------
+    a : Array
+        A 2D JAX array (shape ``(N_rows, N)``). The array must be symmetric and
+        is expected to be sharded across the mesh along the first (row) axis:
+        ``in_specs`` must be ``P(<axis_name>, None)``.
+    T_A : int
+        Tile width used by the native solver; determines per-device padding. A
+        implementation limit may apply (the code checks ``T_A <= 1024``).
+    mesh : Mesh
+        JAX device mesh used for ``jax.shard_map``.
+    in_specs : PartitionSpec or 1-element tuple/list of PartitionSpec
+        PartitionSpec describing the input sharding (row sharding).
+    return_eigenvectors : bool, optional
+        If True (default) compute and return eigenvectors in addition to
+        eigenvalues. When True the returned eigenvectors are row-sharded to the
+        same layout as the input and will be unpadded if padding was applied.
+    return_status : bool, optional
+        If True, append a host-replicated int32 solver status to the return
+        values. If False, return only the computed quantities.
+    pad : bool, optional
+        If True (default) apply per-device padding to meet ``T_A`` requirements;
+        if False the caller must supply already-correct shapes.
 
-    Args:
-        a: 2D JAX array representing the matrix to decompose. Must be symmetric.
-        T_A: Tile size for cyclic 1D layout. Only used if `cyclic_1d` is True.
-        mesh: JAX Mesh object describing the device mesh.
-        in_specs: PartitionSpec or tuple of PartitionSpec describing the sharding of `a`.
-        return_eigenvectors: If True, also computes and returns the eigenvectors.
-        cyclic_1d: If True, input arrays are assumed to be sharded in a cyclic 1D manner. If False, arrays are sharded along columns.
-        return_status: If True, returns a tuple (..., status), where `status` is an integer indicating the success or failure of the computation.
-            For CUDA Toolkit 12.8.0, status codes are defined in `cusolver_common.h`.
+    Returns
+    -------
+    Depending on ``return_eigenvectors`` and ``return_status`` the function
+    returns one of:
+      - ``eigenvalues`` (shape ``(N,)``)
+      - ``(eigenvalues, eigenvectors)``
+      - ``(eigenvalues, status)``
+      - ``(eigenvalues, eigenvectors, status)``
 
-    Returns:
-        out = (eigenvalues, eigenvectors) if `return_eigenvectors` is True.
-        out = eigenvalues if `return_eigenvectors` is False.
-        Returns additional `status` if `return_status` is True.
+    Raises
+    ------
+    TypeError
+        If ``in_specs`` is not a ``PartitionSpec`` or a single-element container.
+    ValueError
+        If ``in_specs`` does not indicate row sharding (``P(<axis_name>, None)``)
+        or if ``T_A`` exceeds implementation limits.
+    AssertionError
+        If ``a`` is not 2D or if shape requirements are violated when ``pad=False``.
 
-    Raises:
-        AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
-        ValueError: If the input array does not have the correct sharding or if T_A > 1024.
+    Notes
+    -----
+    - Eigenvectors (when requested) are returned in the same block-cyclic row
+      sharding as the input; any temporary padding is removed before returning.
+    - The FFI call can donate the input buffer (``donate_argnums=0``) to
+      enable zero-copy operation with the native library.
+    - If the native solver fails the outputs may contain NaNs and the status
+      (when requested) will be non-zero.
     """
     ndev =int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
     # Normalize in_specs so it's a single PartitionSpec instance (not an iterable)

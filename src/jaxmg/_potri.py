@@ -20,40 +20,54 @@ def potri(
     return_status: bool = False,
     pad=True,
 ) -> Union[Array, Tuple[Array, int]]:
-    """
-    Computes the inverse of a symmetric positive-definite matrix `a` using a
-    distributed multi-GPU CUDA kernel via JAX FFI.
+    """Compute the inverse of a symmetric matrix using the multi-GPU potri native kernel.
 
-    This function calls a the cuSolverMg CUDA library to compute the matrix inverse.
+    This wrapper prepares inputs for the native cuSolverMg-based "potri_mg"
+    kernel and executes it via ``jax.ffi.ffi_call`` under ``jax.jit`` and
+    ``jax.shard_map``. It handles per-device padding required by the tile size
+    ``T_A`` (via :func:`calculate_padding`, :func:`pad_rows`, :func:`unpad_rows`) and
+    symmetrizes the output to recover the full matrix.
 
-    The input matrix `a` must be 2D, symmetric, and positive-definite.
+    Parameters
+    ----------
+    a : Array
+        A 2D JAX array (shape ``(N_rows, N)``). The array must be symmetric and
+        is expected to be sharded across the mesh along the first (row) axis:
+        ``in_specs`` must be ``P(<axis_name>, None)``.
+    T_A : int
+        Tile width used by the native solver; determines per-device padding.
+    mesh : Mesh
+        JAX device mesh used for ``jax.shard_map``.
+    in_specs : PartitionSpec or 1-element tuple/list of PartitionSpec
+        PartitionSpec describing the input sharding (row sharding).
+    return_status : bool, optional
+        If True, return ``(A_inv, status)`` where ``status`` is a host-replicated
+        int32 returned from the native solver. If False, return ``A_inv`` only.
+    pad : bool, optional
+        If True (default) apply per-device padding to meet ``T_A`` requirements;
+        if False the caller must already supply correctly padded shapes.
 
-    The matrix must be sharded along its columns using PartitionSpec P(None, str).
+    Returns
+    -------
+    Array or (Array, int)
+        The inverted matrix (row-sharded) and, optionally, the native solver
+        status code when ``return_status=True``.
 
-    If `a` is not postive-definite, CusolverMg will fail and return an error status.
-    If `a` is not symmetric, CusolverMg will fail and return an error status.
-    In both cases, the returned result will be NaN.
+    Raises
+    ------
+    TypeError
+        If ``in_specs`` is not a ``PartitionSpec`` or a single-element container.
+    ValueError
+        If ``in_specs`` does not indicate row sharding ``P(<axis_name>, None)``.
+    AssertionError
+        If ``a`` is not 2D or if required shapes do not match when ``pad=False``.
 
-    If `cyclic_1d` is set to True but the input arrays are not sharded in a cyclic 1d manner,
-    the data layout will be wrong and the kernel will fail since `a` will likely not be positve definite with the
-    given data layout.
-
-    Args:
-        a: 2D JAX array representing the matrix to invert. Must be symmetric and positive-definite.
-        T_A: Tile size for cyclic 1D layout. Only used if `cyclic_1d` is True.
-        mesh: JAX Mesh object describing the device mesh.
-        in_specs: PartitionSpec or tuple of PartitionSpec describing the sharding of `a`.
-        cyclic_1d: If True, input arrays are assumed to be sharded in a cyclic 1D manner. If False, arrays are sharded along columns.
-        return_status: If True, returns a tuple (A_inv, status), where `status` is an integer indicating the success or failure of the computation.
-            For CUDA Toolkit 12.8.0, status codes are defined in `cusolver_common.h`.
-
-     Returns:
-        If `return_status` is False: The inverse of `a` as a 2D array, sharded columnwise across all devices.
-        If `return_status` is True: A tuple (A_inv, status), where `status` is an integer status code from the CUDA kernel.
-
-    Raises:
-        AssertionError: If `a` is not 2D or if `in_specs` is not of the correct length/type.
-        ValueError: If the input array does not have the correct sharding.
+    Notes
+    -----
+    - The FFI call donates the input buffer (``donate_argnums=0``) to enable
+      zero-copy buffer sharing with the native library.
+    - If the native solver fails the output may contain NaNs and ``status``
+      will be non-zero.
     """
 
     ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])

@@ -14,72 +14,64 @@ from matplotlib.patches import Patch
 
 
 def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
-    """
-    Perform a 1D cyclic multigrid operation on the row dimension of a 2D array using
-    a custom XLA FFI kernel ("cyclic_mg") executed under jax.jit + jax.shard_map.
+    """Prepare and run the 1D block-cyclic remapping FFI kernel for row-sharded arrays.
 
-    This function prepares per-device padding (if required), arranges a jax.ffi
-    custom-call with the expected input/output layouts, and runs the kernel while
-    preserving the array's sharding. When padding is enabled (pad=True) the input
-    is padded on each device to match the FFI kernel's required local tile size,
-    the kernel is executed, and the extra rows are removed before returning. The
-    call is JIT-compiled with donate_argnums=0 so the input buffer may be donated
-    to the custom-call for buffer sharing / zero-copy semantics.
+    This helper wraps a custom XLA FFI kernel ("cyclic_mg") that converts a
+    row-sharded 2D array into the 1D block-cyclic layout expected by the native
+    multi-GPU solvers. The function handles per-device padding (to make local
+    tile sizes a multiple of ``T_A``), runs the FFI custom-call under
+    ``jax.jit`` and ``jax.shard_map`` (with ``donate_argnums=0`` for buffer
+    sharing), and removes any temporary padding before returning.
 
     Parameters
     ----------
     a : Array
-        A 2D JAX array with shape (N_rows, N). The array must be sharded across
-        devices by rows according to `in_specs` (see below).
+        A 2D JAX array of shape (N_rows, N). The array must be sharded across the
+        mesh along the first (row) axis using a single PartitionSpec. In other
+        words ``in_specs`` must be ``P(<axis_name>, None)``.
     T_A : int
-        A tile / transfer size parameter used to compute per-device padding and to
-        select the behavior of the underlying FFI kernel.
+        Tile width used by the native solver / remapping kernel. Determines the
+        per-device padding applied so that each device's local row count is a
+        multiple of ``T_A`` when required.
     mesh : Mesh
-        The jax.experimental.pjit / shard_map mesh object describing device layout.
-    in_specs : PartitionSpec or 1-element list/tuple of PartitionSpec
-        Partitioning specification for the input array. Must be a single
-        PartitionSpec (or a single-element container). The function expects the
-        array to be sharded along rows (i.e. a PartitionSpec of the form
-        PartitionSpec(<row_axis>, None) such as P("x", None)).
-    pad : bool, optional (default True)
-        If True, per-device padding will be applied so that each device's local
-        tile size satisfies the kernel requirement; padding is removed before
-        returning. If False, the function asserts that the input already has the
-        correct size and will not perform implicit padding.
+        JAX device mesh used for ``jax.shard_map``.
+    in_specs : PartitionSpec or 1-element tuple/list of PartitionSpec
+        The partitioning specification describing the input sharding. This must
+        be a single ``PartitionSpec`` (or a 1-element container) indicating row
+        sharding: ``P(<axis_name>, None)``.
+    pad : bool, optional
+        If True (default) apply per-device padding when the local shard size is
+        not a multiple of ``T_A``. If False, the caller must provide an input
+        whose shape already matches the kernel's requirements.
 
     Returns
     -------
     Array
-        A 2D JAX array with the same logical shape and dtype as the input (padding
-        removed if pad=True). The returned array is sharded in the same way as the
-        input (in_specs / out_specs are set to the same PartitionSpec).
+        The remapped 2D array with the same logical shape and dtype as ``a``.
+        Any temporary padding is removed before the result is returned. The
+        returned array retains the same sharding specification as the input.
 
     Raises
     ------
     TypeError
-        If `in_specs` is not a PartitionSpec or a 1-element list/tuple containing a
-        PartitionSpec.
+        If ``in_specs`` is not a ``PartitionSpec`` or a single-element container
+        containing one.
     ValueError
-        If `in_specs` is provided as an iterable with length != 1, or if the
-        provided PartitionSpec does not indicate row sharding (i.e. not of the
-        expected form P(row, None)).
+        If ``in_specs`` does not indicate row sharding (i.e. is not
+        ``P(<axis_name>, None)``) or if a 1-element container is provided with
+        length != 1.
     AssertionError
-        If `a` is not 2D, or if pad=False but the input shape does not match the
-        kernel's expected (non-padded) layout (a runtime assertion will fail).
+        If ``a`` is not 2D or if ``pad=False`` but the provided shape does not
+        already satisfy the kernel's non-padded layout requirements.
 
     Notes
     -----
-    - The implementation uses jax.ffi.ffi_call to invoke a custom XLA kernel named
-      "cyclic_mg". The FFI call and surrounding jax.jit/shard_map are configured to
-      allow input/output buffer aliasing (donation) for performance.
-    - Because donate_argnums=0 is used, the input buffer may be donated to the
-      kernel; after the call the input should be treated as having been consumed by
-      the operation semantics of the custom call.
-    - This function relies on a helper calculate_padding(shard_size, T_A) to
-      compute required per-device padding, as well as pad_rows/unpad_rows helpers
-      when pad=True.
-    - The function expects the number of devices in the mesh to evenly partition
-      the first (row) dimension (local shard size is computed as N_rows // ndev).
+    - The FFI call is executed with ``donate_argnums=0`` so the input buffer
+      may be donated to the native kernel for zero-copy performance.
+    - Padding calculation is performed with :func:`calculate_padding` and the
+      helpers :func:`pad_rows` / :func:`unpad_rows` are used when ``pad=True``.
+    - The function assumes the mesh/device count evenly partitions the first
+      (row) dimension; local shard size is computed as ``N_rows // ndev``.
     """
 
     ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
