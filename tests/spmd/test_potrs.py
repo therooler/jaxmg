@@ -11,7 +11,7 @@ import jax
 jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding
-from jaxmg import potrs
+from jaxmg import potrs, potrs_shardmap_ctx
 from jaxmg.utils import random_psd
 
 from functools import partial
@@ -25,19 +25,45 @@ N_list = list(i * ndev for i in [2, 3, 4, 10])
 T_A_list = [1, 2, 3, 5]
 
 
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potrs(_a, _b, _T_A):
+    out = partial(potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True)(
+        _a, _b, _T_A
+    )
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potrs_status(_a, _b, _T_A):
+    out = partial(
+        potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True, return_status=True
+    )(_a, _b, _T_A)
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_potrs_no_shardmap(_a, _b, _T_A):
+    out = jax.shard_map(
+        partial(potrs_shardmap_ctx, T_A=_T_A),
+        mesh=mesh,
+        in_specs=(P("x", None), P(None, None)),
+        out_specs=(P(None, None), P(None)),
+        check_vma=False,
+    )(_a, _b)
+    return out
+
+
 def cusolver_solve_arange(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     b = jnp.ones((N, 1), dtype=dtype)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
-
-    out = jax.jit(
-        partial(potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True),
-        static_argnums=2,
-    )(A, b, T_A)
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+    out = jitted_potrs(_A.copy(), _b.copy(), T_A)
     expected_out = 1.0 / (jnp.arange(N, dtype=dtype) + 1)
     assert jnp.allclose(out.flatten(), expected_out)
+    out_no_shm, _ = jitted_potrs_no_shardmap(_A.copy(), _b.copy(), T_A)
+    assert jnp.allclose(out_no_shm.flatten(), expected_out)
 
 
 def cusolver_solve_psd(N, T_A, dtype):
@@ -49,32 +75,24 @@ def cusolver_solve_psd(N, T_A, dtype):
     _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
     _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-    out = jax.jit(
-        partial(potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True),
-        static_argnums=2,
-    )(_A, _b, T_A)
+    out = jitted_potrs(_A.copy(), _b.copy(), T_A)
     norm_scipy = jnp.linalg.norm(b - A @ expected_out)
     norm_potrf = jnp.linalg.norm(b - A @ out)
     assert jnp.isclose(norm_scipy, norm_potrf, rtol=10, atol=0.0)
+    out_no_shm, _ = jitted_potrs_no_shardmap(_A.copy(), _b.copy(), T_A)
+    norm_scipy = jnp.linalg.norm(b - A @ expected_out)
+    norm_potrf = jnp.linalg.norm(b - A @ out_no_shm)
+    assert jnp.allclose(out_no_shm.flatten(), out.flatten())
 
 
 def cusolver_solve_non_psd(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) - 1)
     b = jnp.ones((N, 1), dtype=dtype)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    _b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-    out, status = jax.jit(
-        partial(
-            potrs,
-            mesh=mesh,
-            in_specs=(P("x", None), P(None, None)),
-            return_status=True,
-            pad=True,
-        ),
-        static_argnums=2,
-    )(A, b, T_A)
+    out, status = jitted_potrs_status(_A.copy(), _b.copy(), T_A)
     status.block_until_ready()
     out.block_until_ready()
     assert status == 7
@@ -90,16 +108,7 @@ def cusolver_solve_non_symm(N, T_A, dtype):
     A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
     b = jax.device_put(b, NamedSharding(mesh, P(None, None)))
 
-    out, status = jax.jit(
-        partial(
-            potrs,
-            mesh=mesh,
-            in_specs=(P("x", None), P(None, None)),
-            return_status=True,
-            pad=True,
-        ),
-        static_argnums=2,
-    )(A, b, T_A)
+    out, status = jitted_potrs_status(A, b, T_A)
     status.block_until_ready()
     out.block_until_ready()
     assert status == 7

@@ -11,6 +11,7 @@ from functools import partial
 
 from ._cyclic_1d import calculate_padding, pad_rows
 
+
 def potrs(
     a: Array,
     b: Array,
@@ -154,67 +155,92 @@ def potrs(
         return out
 
 
-def potrs_no_shardmap():
-    pass
+def potrs_shardmap_ctx(a: Array, b: Array, T_A: int, pad=True):
+    """Solve A x = B by invoking the native multi-GPU potrs kernel without shard_map.
 
+    This helper is a lightweight, lower-level variant of :func:`potrs` intended
+    for contexts where the input ``a`` is already laid out and sharded at the
+    application level (for example when running inside a custom
+    ``shard_map``/pjit-managed context). It performs the same padding logic
+    driven by ``T_A`` and directly calls the native ``potrs_mg`` FFI targets 
+    via ``jax.ffi.ffi_call`` instead of constructing an additional ``shard_map``
+    wrapper.
 
-# def potrs_no_shardmap(
-#     a: Array, b: Array, T_A: int, cyclic_1d: bool = False, axis_name="x"
-# ) -> Union[Array, Tuple[Array, int]]:
-#     """
-#     Solves the linear system `a * x = b` for `x` using the Cholesky decomposition of a symmetric positive-definite matrix `a`
-#     on multiple GPUs via a distributed CUDA kernel through JAX FFI.
+    Args:
+        a (Array): 2D coefficient matrix of shape ``(N_rows // ndev, N)``. Must be
+            symmetric for correct solver behavior.
+        b (Array): 2D right-hand side. Its first dimension must equal the
+            number of columns of ``a`` (i.e. ``a.shape[1] == b.shape[0]``).
+        T_A (int): Tile width used by the native solver; used to compute
+            per-device padding.
+        pad (bool, optional): If True (default) apply per-device padding to
+            ``a`` so each local shard length is compatible with ``T_A``. If
+            False the caller must ensure shapes already meet the kernel's
+            requirements.
 
-#     This function calls a CusolverMg CUDA kernel to compute the solution.
-#     The input matrix `a` must be 2D, symmetric, and positive-definite,
-#     and the right-hand side `b` must be a 2D array with the same number of rows as `a`.
+    Returns:
+        tuple: ``(x, status)`` where ``x`` is the solver result (same shape as
+            ``b``) and ``status`` is the int32 status value returned by the
+            native kernel (shape ``(1,)`` device array).
 
-#     The matrix `a` must be sharded along its columns using PartitionSpec P(None, str),
-#     and `b` must be replicated across all devices using PartitionSpec P(None, None).
-#     If `cyclic_1d` is True, the input arrays are assumed to be sharded in a cyclic 1D layout.
+    Raises:
+        AssertionError: If input arrays are not 2D or their shapes are
+            incompatible.
 
-#     If `a` is not positive-definite or not symmetric, CusolverMg will fail and
-#     return an error status. In both cases, the returned result will be NaN.
+    Notes:
+        - This function does not perform sharding via ``jax.shard_map`` and
+          therefore must be called only in a shard_map context.
+        - Because it does not use ``donate_argnums``, the input buffers are
+          not donated to the FFI call (no zero-copy donation semantics).
+    """
+    ndev = int(os.environ["JAXMG_NUMBER_OF_DEVICES"])
+    assert a.shape[1] == b.shape[0], "A and b must have the same number of rows."
+    assert a.ndim == 2, "a must be a 2D array."
+    assert b.ndim == 2, "b must be a 2D array."
+    shard_size, N = a.shape
 
-#     Args:
-#         a: 2D JAX array representing the matrix to decompose. Must be symmetric and positive-definite.
-#         b: 2D JAX array representing the right-hand side of the linear system. Must have the same number of rows as `a`.
-#         T_A: Tile size for cyclic 1D layout. Only used if `cyclic_1d` is True.
-#         cyclic_1d: If True, input arrays are assumed to be sharded in a cyclic 1D manner.
-#             If False, arrays are sharded along columns for `a` and replicated for `b`.
+    # Keep b in column-major layout
+    input_layouts = ((0, 1), (1, 0))
+    output_layouts = ((1, 0), (0,))
 
-#     Returns:
-#         The solution `x` as a 2D array, replicated across all devices.
-#         The status of the solver, replicated across all devices.
+    padding = calculate_padding(shard_size, T_A)
+    out_type = (
+        jax.ShapeDtypeStruct(b.shape, b.dtype),
+        jax.ShapeDtypeStruct((1,), jnp.int32),
+    )
 
-#     Raises:
-#         AssertionError: If `a` or `b` are not 2D, if their shapes do not match, or if `in_specs` is not of the correct length/type.
-#         ValueError: If the input arrays do not have the correct sharding.
-#     """
-#     assert a.shape[0] == b.shape[0], "A and b must have the same number of rows."
-#     assert a.ndim == 2, "a must be a 2D array."
-#     assert b.ndim == 2, "b must be a 2D array."
+    # Prepare ffi call
+    ffi_fn = partial(
+        jax.ffi.ffi_call(
+            "potrs_mg",
+            out_type,
+            input_layouts=input_layouts,
+            output_layouts=output_layouts,
+        ),
+        T_A=T_A,
+    )
 
-#     ndev = jax.local_device_count()
-#     input_layouts = (
-#         (1, 0),
-#         (1, 0),
-#     )
-#     output_layouts = ((1, 0), (0,))
-#     out_type = (
-#         jax.ShapeDtypeStruct(b.shape, b.dtype),
-#         jax.ShapeDtypeStruct((1,), jnp.int32),
-#     )
+    # Jit with donate_argnums=0 is crucial for buffer sharing
+    def impl(_a, _b):
+        _a, _status = ffi_fn(_a, _b)
+        return _a, _status
 
-#     def impl(_a, _b):
-#         if not cyclic_1d and ndev > 1:
-#             _a = cyclic_1d_no_shardmap(_a, T_A=T_A, ndev=ndev, axis_name=axis_name)
-#         _b, status = jax.ffi.ffi_call(
-#             "potrs_mg",
-#             out_type,
-#             input_layouts=input_layouts,
-#             output_layouts=output_layouts,
-#         )(_a, _b, T_A=T_A)
-#         return _b, status
+    if not pad or padding == 0 or T_A >= N // ndev:
+        if T_A < N // ndev:
+            assert (
+                shard_size == (N + ndev * padding) // ndev
+            ), f"pad=False, but with T_A={T_A}, we need padding of {padding} rows per device."
+            f"Expected {N + ndev * padding} rows, but received {shard_size}"
+        # Identity padding
+        pad_fn = lambda _a: _a
 
-#     return impl(a, b)
+    else:
+        # Make padding fns
+        pad_fn = partial(pad_rows, padding=padding)
+
+    def fn(_a, _b):
+        _a = pad_fn(_a)
+        _out, _status = impl(_a, _b)
+        return _out, _status
+
+    return fn(a, b)

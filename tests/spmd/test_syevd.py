@@ -15,7 +15,7 @@ import pytest
 
 from functools import partial
 
-from jaxmg import syevd
+from jaxmg import syevd, syevd_shardmap_ctx
 from jaxmg.utils import random_psd
 
 devices = [d for d in jax.devices() if d.platform == "gpu"]
@@ -27,58 +27,92 @@ N_list = list(i * ndev for i in [2, 3, 4, 10])
 T_A_list = [1, 2, 3, 5]
 
 
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_syevd(_a, _T_A):
+    out = partial(syevd, mesh=mesh, in_specs=(P("x", None),), pad=True)(_a, _T_A)
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_syevd_no_shardmap(_a, _T_A):
+    out = jax.shard_map(
+        partial(syevd_shardmap_ctx, T_A=_T_A),
+        mesh=mesh,
+        in_specs=(P("x", None),),
+        out_specs=(P(None), P(None, None), P(None)),
+        check_vma=False,
+    )(_a)
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_syevd_no_V(_a, _T_A):
+    out = partial(
+        syevd, mesh=mesh, in_specs=(P("x", None),), return_eigenvectors=False, pad=True
+    )(_a, _T_A)
+    return out
+
+
+@partial(jax.jit, static_argnames=("_T_A",))
+def jitted_syevd_no_V_no_shardmap(_a, _T_A):
+    out = jax.shard_map(
+        partial(syevd_shardmap_ctx, T_A=_T_A, return_eigenvectors=False),
+        mesh=mesh,
+        in_specs=(P("x", None),),
+        out_specs=(P(None), P(None)),
+        check_vma=False,
+    )(_a)
+    return out
+
+
 def cusolver_solve_arange(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     eigenvalues_expected = jnp.diag(A)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    eigenvalues, V = jax.jit(
-        partial(syevd, mesh=mesh, in_specs=(P("x", None),)), static_argnums=1
-    )(A, T_A=T_A)
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    eigenvalues, V = jitted_syevd(_A.copy(), T_A)
     assert jnp.allclose(eigenvalues_expected, eigenvalues)
-    eigenvalus_VtAV = jnp.diag(V.T @ A @ V)
+    eigenvalus_VtAV = jnp.diag(V @ A @ V.T)
     assert jnp.allclose(eigenvalus_VtAV, eigenvalues_expected)
+    eigenvalues_no_shm, V, _ = jitted_syevd_no_shardmap(_A.copy(), T_A)
+    assert jnp.allclose(eigenvalues_expected, eigenvalues_no_shm)
 
 
 def cusolver_solve_psd(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     eigenvalues_expected, V_expected = jnp.linalg.eigh(A)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    eigenvalues, V = jax.jit(
-        partial(syevd, mesh=mesh, in_specs=(P("x", None),)), static_argnums=1
-    )(A, T_A=T_A)
-    norm_syevd = jnp.linalg.norm(V.T @ A - jnp.diag(eigenvalues) @ V)
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    eigenvalues, V = jitted_syevd(_A.copy(), T_A)
+    norm_syevd = jnp.linalg.norm(V @ A - jnp.diag(eigenvalues) @ V.T)
     norm_lax = jnp.linalg.norm(
-        V_expected.T @ A - jnp.diag(eigenvalues_expected) @ V_expected
+        V_expected @ A - jnp.diag(eigenvalues_expected) @ V_expected.T
     )
     assert jnp.isclose(norm_syevd, norm_lax, rtol=10, atol=0.0)
+    eigenvalues_no_shm, V, _ = jitted_syevd_no_shardmap(_A.copy(), T_A)
+    assert jnp.allclose(eigenvalues_expected, eigenvalues_no_shm, rtol=10, atol=0.0)
 
 
 def cusolver_solve_arange_no_V(N, T_A, dtype):
     A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
     eigenvalues_expected = jnp.diag(A)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-
-    eigenvalues = jax.jit(
-        partial(syevd, mesh=mesh, in_specs=(P("x", None),), return_eigenvectors=False),
-        static_argnums=1,
-    )(A, T_A=T_A)
-    assert jnp.allclose(eigenvalues_expected, eigenvalues, rtol=10, atol=0.0)
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    eigenvalues = jitted_syevd_no_V(_A.copy(), T_A)
+    assert jnp.allclose(eigenvalues_expected, eigenvalues)
+    eigenvalues_no_shm, _ = jitted_syevd_no_V_no_shardmap(_A.copy(), T_A)
+    assert jnp.allclose(eigenvalues_expected, eigenvalues_no_shm)
 
 
 def cusolver_solve_psd_no_V(N, T_A, dtype):
     A = random_psd(N, dtype=dtype, seed=1234)
     eigenvalues_expected = jnp.linalg.eigvalsh(A)
     # Make mesh and place data
-    A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
-    eigenvalues = jax.jit(
-        partial(syevd, mesh=mesh, in_specs=(P("x", None),), return_eigenvectors=False),
-        static_argnums=1,
-    )(A, T_A=T_A)
-
+    _A = jax.device_put(A, NamedSharding(mesh, P("x", None)))
+    eigenvalues = jitted_syevd_no_V(A.copy(), T_A)
     assert jnp.allclose(eigenvalues, eigenvalues_expected, rtol=10, atol=0.0)
+    eigenvalues_no_shm, _ = jitted_syevd_no_V_no_shardmap(_A.copy(), T_A)
+    assert jnp.allclose(eigenvalues_expected, eigenvalues_no_shm, rtol=10, atol=0.0)
 
 
 @pytest.mark.parametrize(
