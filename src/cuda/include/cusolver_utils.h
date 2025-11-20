@@ -276,6 +276,7 @@ static void memcpyCyclicShard(int num_devices, gpuStream_t stream, const int *de
             std::printf("\n");
         }
     }
+
     // Implement Python-style cycle moves using two staging buffers. Leave TODOs
     // for the actual buffer allocation / copy operations so you can fill them in.
 

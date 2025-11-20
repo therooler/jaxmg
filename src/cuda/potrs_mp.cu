@@ -235,28 +235,7 @@ namespace jax
                                                                     T_B,        /* number of columns in a tile */
                                                                     compute_type, gridB));
             }
-            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
-            sync_point.arrive_and_wait();
 
-            memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(), N, batch_a,
-                                         /* input */
-                                         array_data_A, lda,
-                                         /* output */
-                                         N,           /* number of columns of global A */
-                                         T_A,         /* number of columns per column tile */
-                                         lda,         /* leading dimension of local A */
-                                         array_data_A /* device pointer for shard on device */
-            );
-
-            // asign B on every device, even though solution will only be on device 0
-            memcpyShard<data_type>(nbGpus, N, NRHS,
-                                   /* input */
-                                   array_data_b, ldb,
-                                   /* output */
-                                   1,           /* number of columns of global A */
-                                   ldb,         /* leading dimension of local A */
-                                   array_data_b /* device pointer for shard on device */
-            );
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
 
@@ -296,6 +275,18 @@ namespace jax
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
+            printf("Hit shard\n");
+            if (currentDevice == 0)
+            {
+                memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
+                                             N, batch_a, T_A,
+                                             /* input */
+                                             shmA.data(), false);
+            }
+
+            CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
+            sync_point.arrive_and_wait();
+             printf("Done with shard\n");
 
             if (currentDevice == 0)
             {
@@ -453,8 +444,9 @@ namespace jax
                                    ffi::Result<ffi::AnyBuffer> out, ffi::Result<ffi::Buffer<ffi::S32>> status)
         {
             auto dataType = a.element_type();
-            // Columns are batched
-            FFI_ASSIGN_OR_RETURN((const auto [N, batch_a]), SplitBatch1D(a.dimensions()));
+            
+            // Rows are batched
+            FFI_ASSIGN_OR_RETURN((const auto [batch_a, N]), SplitBatch1D(a.dimensions()));
             FFI_ASSIGN_OR_RETURN((const auto [N_b, NRHS]), SplitBatch1D(b.dimensions()));
             FFI_RETURN_IF_ERROR(CheckShape(b.dimensions(), {N, NRHS}, "b", "potrf"));
 
