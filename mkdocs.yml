@@ -101,7 +101,6 @@ nav:
         - "examples/spmd_mpmd.ipynb"
     - API:
         - "api/potrs.md"
-        - "api/potrs_mp.md"
         - "api/potri.md"
         - "api/syevd.md"
         - "api/cyclic_1d.md"

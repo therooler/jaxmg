@@ -1,7 +1,7 @@
 import socket
 import os
 import hashlib
-
+import warnings
 import jax
 import jax.numpy as jnp
 from jax.sharding import NamedSharding
@@ -35,12 +35,6 @@ def maybe_real_dtype_from_complex(dtype):
         else (jnp.float64 if dtype == jnp.complex128 else dtype)
     )
 
-
-def symmetrize(_a):
-    _a = jnp.tril(_a)
-    return _a + _a.T.conj() - jnp.diag(jnp.diag(_a))
-
-
 class JaxMgWarning(UserWarning):
     """Warnings emitted by JaxMg."""
 
@@ -61,9 +55,12 @@ def determine_distributed_setup():
     # print(unique_ids)
     num_machines = len(unique_ids)
     # print(all_ids)
-    print("calling determine")
-    cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
-    n_visisble_devices = len(cuda_visible_devices.split(","))
+    try:
+        cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
+        n_visisble_devices = len(cuda_visible_devices.split(","))
+    except KeyError:
+        warnings.warn(JaxMgWarning("GPU(s) detected by jax but CUDA_VISIBLE_DEVICES is not set. "))
+        n_visisble_devices = len(list(filter(lambda d: d.platform=='gpu', jax.devices())))
     n_devices = jax.device_count()
     n_devices_per_machine = n_devices // num_machines
     n_devices_per_process = n_devices // n_proc
