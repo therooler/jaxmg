@@ -1,7 +1,7 @@
 import numpy as np
 import os
 import jax
-import jax.numpy as jnp
+
 from jax.sharding import Mesh, PartitionSpec as P
 from jax import Array
 from typing import Tuple, List
@@ -11,16 +11,6 @@ from functools import partial
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch
-
-import ctypes
-
-SHARED_LIBRARY_CYCLIC = os.path.join(os.path.dirname(__file__), "bin/libcyclic.so")
-library_cyclic = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_CYCLIC)
-
-# Register FFI targets
-jax.ffi.register_ffi_target(
-    "cyclic_mg", jax.ffi.pycapsule(library_cyclic.CyclicMgFFI), platform="CUDA"
-)
 
 
 def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True):
