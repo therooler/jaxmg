@@ -1,3 +1,5 @@
 # jaxmg.potri
 
-::: jaxmg._potri.potri
+::: jaxmg.potri
+
+::: jaxmg.potri_shardmap_ctx

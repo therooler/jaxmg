@@ -7,7 +7,9 @@ different processes. In `potrs_mp.cu`, we achieve this again through shared memo
 handles:
 
 ```cpp
-ipcGetHandleAndOffset(array_data_A, shmAipc[currentDevice], shmoffsetA[currentDevice]);
+ipcGetHandleAndOffset(array_data_A, 
+                      shmAipc[currentDevice], 
+                      shmoffsetA[currentDevice]);
 ```
 
 A significant complication is that JAX' memory allocation is managed by XLA, which means that device pointers are actually
@@ -15,17 +17,22 @@ base pointers together with some offset. cudaIPC only exports the base-pointer, 
 offset and extract the true pointer:
 
 ```cpp
-opened_ptrs_A = ipcGetDevicePointers<data_type>(currentDevice, nbGpus, shmAipc, shmoffsetA);
+opened_ptrs_A = ipcGetDevicePointers<data_type>(currentDevice, 
+                                                nbGpus,
+                                                shmAipc, 
+                                                shmoffsetA);
 ```
 
 We gather all the pointers in process 0 and set up the solver in the same way as before. After completion, it is essential
 to close the memory handles
 
 ```cpp
-ipcCloseDevicePointers(currentDevice, opened_ptrs_A.bases, nbGpus);
+ipcCloseDevicePointers(currentDevice, 
+                       opened_ptrs_A.bases, 
+                       nbGpus);
 ```
 
 to avoid memory leaks.
 
-> **Note:** If you've made it this far into the README.md and have experience or thoughts on this, please reach out!
+> **Note:** If you've made it this far and have experience or thoughts on this, please reach out!
 

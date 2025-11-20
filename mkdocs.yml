@@ -92,18 +92,19 @@ plugins:
                       show_symbol_type_toc: true
 
 nav:
-    - "index.md"
-    - "install.md"
+    - Home:
+        - "index.md"
+        - "install.md"
     - Examples:
         - "examples/potrs_example.ipynb"
         - "examples/potrs_shard_map.ipynb"
         - "examples/block_cyclic_data_layout.ipynb"
         - "examples/spmd_mpmd.ipynb"
     - API:
+        - "api/index.md"
         - "api/potrs.md"
         - "api/potri.md"
         - "api/syevd.md"
-        - "api/cyclic_1d.md"
     - Technical Details:
         - "technical_details/spmd.md"
         - "technical_details/mpmd.md"

@@ -22,13 +22,25 @@ def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=
     FFI kernel under ``jax.jit`` and ``jax.shard_map``, and removal of any
     temporary padding.
 
+    Tip:
+        If the shards of the matrix cannot be padded with tiles of size `T_A`
+        (``N / num_gpus % T_A != 0``) we have to add padding to fit the last tile.
+        This requires copying the matrix, which we want to avoid at all costs for 
+        large ``N``. Make sure you pick ``T_A`` large enough (>=128) and such that it
+        can evenly cover the shards. In principle, increasing ``T_A`` will increase 
+        performance at the cost of memory, but depending on ``N``, the performance
+          will saturate.
+
     Args:
         a (Array): A 2D JAX array of shape ``(N_rows, N)``. Must be sharded across
             the mesh along the first (row) axis using a single ``PartitionSpec``
             (i.e. ``P(<axis_name>, None)``).
-        T_A (int): Tile width used by the native solver / remapping kernel. Used
-            to compute per-device padding so each local shard length is a
-            multiple of ``T_A`` when required.
+        T_A (int): Tile width used by the native solver. Each 
+            local shard length must be a multiple of ``T_A``. If the user provides a 
+            ``T_A`` that is incompatible with the shard size we pad the matrix
+            accordingly. For small tile sizes (``T_A``< 128), the solver can 
+            be extremely slow, so ensure that ``T_A`` is large enough. In principle,
+            the larger ``T_A`` the faster the solver runs.
         mesh (Mesh): JAX device mesh used for ``jax.shard_map``.
         in_specs (PartitionSpec or tuple/list[PartitionSpec]): Partitioning
             specification describing the input sharding. Must be a single

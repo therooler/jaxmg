@@ -1,18 +1,18 @@
+# Installation
 Clone the repository and install with:
 
 ```bash
-pip install .
+pip install ".[cuda]"
 ```
+
+This will install a GPU compatible version of JAX. 
 
 To verify the installation (requires at least one GPU):
 
 ```bash
 pytest 
 ```
-There are three types of tests:
+There are two types of tests:
 
-1. CPU-only tests: The block-cyclic remapping is checked by simulating multiple CPU devices.
-2. Single-GPU tests: A single GPU. 
-3. Multi-GPU tests: Requires multiple available GPUs.
-
-If there are not multiple GPUs availble we skip the tests that require multiple GPUs.
+1. SPMD tests: Single Process Multiple GPU tests.
+3. MPMD: Multiple Processes Multiple GPU tests.

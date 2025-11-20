@@ -28,14 +28,27 @@ def potrs(
     per-device padding driven by ``T_A`` and returns the solution (and
     optionally a host-side solver status).
 
+    Tip:
+        If the shards of the matrix cannot be padded with tiles of size `T_A`
+        (``N / num_gpus % T_A != 0``) we have to add padding to fit the last tile.
+        This requires copying the matrix, which we want to avoid at all costs for 
+        large ``N``. Make sure you pick ``T_A`` large enough (>=128) and such that it
+        can evenly cover the shards. In principle, increasing ``T_A`` will increase 
+        performance at the cost of memory, but depending on ``N``, the performance
+          will saturate.
+
     Args:
         a (Array): 2D, symmetric matrix representing the coefficient matrix.
             Expected to be sharded across the mesh along the first (row) axis
             using a single ``PartitionSpec``: ``P(<axis_name>, None)``.
         b (Array): 2D right-hand side. Expected to be replicated across
             devices with ``PartitionSpec`` ``P(None, None)``.
-        T_A (int): Tile size for the 1D block-cyclic layout; determines
-            per-device padding.
+        T_A (int): Tile width used by the native solver. Each 
+            local shard length must be a multiple of ``T_A``. If the user provides a 
+            ``T_A`` that is incompatible with the shard size we pad the matrix
+            accordingly. For small tile sizes (``T_A``< 128), the solver can 
+            be extremely slow, so ensure that ``T_A`` is large enough. In principle,
+            the larger ``T_A`` the faster the solver runs.
         mesh (Mesh): JAX Mesh object used for ``jax.shard_map``.
         in_specs (tuple[list][PartitionSpec]): The sharding specifications for
             ``(a, b)``. Expected to be ``(P(<axis_name>, None), P(None, None))``.
@@ -155,10 +168,10 @@ def potrs(
         return out
 
 
-def potrs_shardmap_ctx(a: Array, b: Array, T_A: int, pad=True):
+def potrs_shardmap_ctx(a: Array, b: Array, T_A: int, pad=True) -> Tuple[Array, Array]:
     """Solve A x = B by invoking the native multi-GPU potrs kernel without shard_map.
 
-    This helper is a lightweight, lower-level variant of :func:`potrs` intended
+    This helper is a lightweight, lower-level variant of :func:`jaxmg.potrs` intended
     for contexts where the input ``a`` is already laid out and sharded at the
     application level (for example when running inside a custom
     ``shard_map``/pjit-managed context). It performs the same padding logic
@@ -166,13 +179,26 @@ def potrs_shardmap_ctx(a: Array, b: Array, T_A: int, pad=True):
     via ``jax.ffi.ffi_call`` instead of constructing an additional ``shard_map``
     wrapper.
 
+    Tip:
+        If the shards of the matrix cannot be padded with tiles of size `T_A`
+        (``N / num_gpus % T_A != 0``) we have to add padding to fit the last tile.
+        This requires copying the matrix, which we want to avoid at all costs for 
+        large ``N``. Make sure you pick ``T_A`` large enough (>=128) and such that it
+        can evenly cover the shards. In principle, increasing ``T_A`` will increase 
+        performance at the cost of memory, but depending on ``N``, the performance
+          will saturate.
+
     Args:
         a (Array): 2D coefficient matrix of shape ``(N_rows // ndev, N)``. Must be
             symmetric for correct solver behavior.
         b (Array): 2D right-hand side. Its first dimension must equal the
             number of columns of ``a`` (i.e. ``a.shape[1] == b.shape[0]``).
-        T_A (int): Tile width used by the native solver; used to compute
-            per-device padding.
+        T_A (int): Tile width used by the native solver. Each 
+            local shard length must be a multiple of ``T_A``. If the user provides a 
+            ``T_A`` that is incompatible with the shard size we pad the matrix
+            accordingly. For small tile sizes (``T_A``< 128), the solver can 
+            be extremely slow, so ensure that ``T_A`` is large enough. In principle,
+            the larger ``T_A`` the faster the solver runs.
         pad (bool, optional): If True (default) apply per-device padding to
             ``a`` so each local shard length is compatible with ``T_A``. If
             False the caller must ensure shapes already meet the kernel's

@@ -49,13 +49,26 @@ def syevd(
     per-device padding driven by ``T_A`` and returns eigenvalues and, optionally,
     eigenvectors and a host-side status.
 
+    Tip:
+        If the shards of the matrix cannot be padded with tiles of size `T_A`
+        (``N / num_gpus % T_A != 0``) we have to add padding to fit the last tile.
+        This requires copying the matrix, which we want to avoid at all costs for 
+        large ``N``. Make sure you pick ``T_A`` large enough (>=128) and such that it
+        can evenly cover the shards. In principle, increasing ``T_A`` will increase 
+        performance at the cost of memory, but depending on ``N``, the performance
+          will saturate.
+
     Args:
         a (Array): A 2D JAX array of shape ``(N_rows, N)``. Must be symmetric and
             is expected to be sharded across the mesh along the first (row)
             axis using ``P(<axis_name>, None)``.
-        T_A (int): Tile width used by the native solver; determines per-device
-            padding. The implementation checks that ``T_A`` is within supported
-            limits (e.g. ``T_A <= 1024``).
+        T_A (int): Tile width used by the native solver. Each 
+            local shard length must be a multiple of ``T_A``. If the user provides a 
+            ``T_A`` that is incompatible with the shard size we pad the matrix
+            accordingly. For small tile sizes (``T_A``< 128), the solver can 
+            be extremely slow, so ensure that ``T_A`` is large enough. 
+            The Cusolver implementation enforces an upper bound of
+            ``T_A <= 1024``.
         mesh (Mesh): JAX device mesh used for ``jax.shard_map``.
         in_specs (PartitionSpec or tuple/list[PartitionSpec]): PartitionSpec
             describing the input sharding (row sharding). May be provided as a
@@ -228,15 +241,27 @@ def syevd_shardmap_ctx(
     ``syevd_no_V_mg`` FFI targets via ``jax.ffi.ffi_call`` instead of
     constructing an additional ``shard_map`` wrapper.
 
+    Tip:
+        If the shards of the matrix cannot be padded with tiles of size `T_A`
+        (``N / num_gpus % T_A != 0``) we have to add padding to fit the last tile.
+        This requires copying the matrix, which we want to avoid at all costs for 
+        large ``N``. Make sure you pick ``T_A`` large enough (>=128) and such that it
+        can evenly cover the shards. In principle, increasing ``T_A`` will increase 
+        performance at the cost of memory, but depending on ``N``, the performance
+          will saturate.
+
     Args:
         a (Array): 2D JAX array representing the local, row-sharded slice of
             the global matrix. Shape should be ``(shard_size, N)`` where
             ``shard_size`` is the per-device (local) row count and ``N`` is the
             global matrix dimension.
-        T_A (int): Tile width used by the native solver; used to compute any
-            per-device padding required so local shards are multiples of
-            ``T_A``. The implementation enforces an upper bound (e.g.
-            ``T_A <= 1024``).
+        T_A (int): Tile width used by the native solver. Each 
+            local shard length must be a multiple of ``T_A``. If the user provides a 
+            ``T_A`` that is incompatible with the shard size we pad the matrix
+            accordingly. For small tile sizes (``T_A``< 128), the solver can 
+            be extremely slow, so ensure that ``T_A`` is large enough. 
+            The Cusolver implementation enforces an upper bound of
+            ``T_A <= 1024``.
         return_eigenvectors (bool, optional): If True (default) compute and
             return eigenvectors in addition to eigenvalues. When True the
             returned eigenvector array has the same local/sharded shape as the

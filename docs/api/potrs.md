@@ -1,5 +1,5 @@
 # jaxmg.potrs
 
-::: jaxmg._potrs.potrs
+::: jaxmg.potrs
 
-::: jaxmg._potrs.potrs_shardmap_ctx
+::: jaxmg.potrs_shardmap_ctx

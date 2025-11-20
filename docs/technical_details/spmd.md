@@ -28,7 +28,10 @@ to initialize the barrier across all threads. The `std::once_flag` ensures that 
 We share device pointers between threads through the creation of shared memory:
 
 ```cpp
-data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice,sync_point, shminfoA, "shmA"); 
+data_type **shmA = get_shm_device_ptrs<data_type>(currentDevice,
+                                                  sync_point, 
+                                                  shminfoA, 
+                                                  "shmA"); 
 ```
 
 In each thread, we then assign the device pointer of the local shard to this shared memory:
@@ -40,9 +43,12 @@ shmA[currentDevice] = array_data_A;
 which we can safely pass to `cuSolverMgPotrf`:
 ```cpp
 cusolver_status = cusolverMgPotrs(cusolverH, CUBLAS_FILL_MODE_LOWER, N,NRHS, 
-                                  reinterpret_cast<void **>(shmA), IA, JA, descrA,
-                                  reinterpret_cast<void **>(shmB), IB, JB, descrB,
+                                  reinterpret_cast<void **>(shmA), 
+                                  IA, JA, descrA,
+                                  reinterpret_cast<void **>(shmB), 
+                                  IB, JB, descrB,
                                   compute_type,
-                                  reinterpret_cast<void **>(shmwork), *shmlwork,
+                                  reinterpret_cast<void **>(shmwork), 
+                                  *shmlwork,
                                   &info);
 ```

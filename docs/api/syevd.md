@@ -1,5 +1,5 @@
 # jaxmg.syevd
 
-::: jaxmg._syevd.syevd
+::: jaxmg.syevd
 
-::: jaxmg._syevd.syevd_shardmap_ctx
+::: jaxmg.syevd_shardmap_ctx
