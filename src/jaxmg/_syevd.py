@@ -87,9 +87,8 @@ def syevd(
             when ``pad=False``.
 
     Notes:
-        - Eigenvectors (when requested) are returned in the same block-cyclic
-          row sharding as the input; any temporary padding is removed before
-          returning.
+        - Eigenvectors (when requested) are returned in the same
+          row sharding as the input.
         - The FFI call can donate the input buffer (``donate_argnums=0``) to
           enable zero-copy interaction with the native library.
         - If the native solver fails the outputs may contain NaNs and the
