@@ -60,6 +60,11 @@ if any("gpu" == d.platform for d in jax.devices()):
         )
     if mode == "SPMD":
         # Load the shared libraries
+
+        SHARED_LIBRARY_CYCLIC = os.path.join(
+            os.path.dirname(__file__), "bin/libcyclic.so"
+        )
+        library_cyclic = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_CYCLIC)
         SHARED_LIBRARY_POTRS = os.path.join(
             os.path.dirname(__file__), "bin/libpotrs.so"
         )
@@ -78,6 +83,9 @@ if any("gpu" == d.platform for d in jax.devices()):
         library_syevd_no_V = ctypes.cdll.LoadLibrary(SHARED_LIBRARY_SYEVD_NO_V)
         # Register FFI targets
         jax.ffi.register_ffi_target(
+            "cyclic_mg", jax.ffi.pycapsule(library_cyclic.CyclicMgFFI), platform="CUDA"
+        )
+        jax.ffi.register_ffi_target(
             "potrs_mg", jax.ffi.pycapsule(library_potrs.PotrsMgFFI), platform="CUDA"
         )
         jax.ffi.register_ffi_target(
@@ -91,7 +99,7 @@ if any("gpu" == d.platform for d in jax.devices()):
             jax.ffi.pycapsule(library_syevd_no_V.SyevdMgFFI),
             platform="CUDA",
         )
-        
+
     else:
         # Load the shared library
         SHARED_LIBRARY_POTRS_MP = os.path.join(
