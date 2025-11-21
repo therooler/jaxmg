@@ -17,7 +17,7 @@ high-level functions; the library handles the remapping and padding required by 
 Multi-GPU Cholesky linear solver for symmetric (Hermitian) positive-definite matrices.
 
 $$
-A x = B, \quad A = L L^{\top} \;\text{(real)}\quad\text{or}\quad A = L L^{\dagger}\;\text{(complex)}
+A x = B, \quad A = L L^{\top} \;\text{(real)} \quad \text{or} \quad A = L L^{\dagger}\;\text{(complex)}
 $$
 
 Solve for $x$ using the Cholesky factors.

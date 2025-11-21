@@ -253,7 +253,7 @@ def plot_block_to_cyclic(
 
     # After: 1D block-cyclic by tiles; pad to multiple of T_A
 
-    pad = calculate_padding(shard_size, T_A, ndev)
+    pad = calculate_padding(shard_size, T_A)
 
     total_cols_padded = total_cols + pad * ndev
     before = np.ones((N_rows, total_cols_padded), dtype=int) * ndev

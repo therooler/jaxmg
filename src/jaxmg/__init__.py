@@ -135,6 +135,7 @@ from ._cyclic_1d import (
     unpad_rows,
     verify_cyclic,
     get_cols_cyclic,
+    plot_block_to_cyclic
 )
 
 __all__ = [
@@ -151,5 +152,6 @@ __all__ = [
     "verify_cyclic",
     "calculate_padding",
     "get_cols_cyclic",
+    "plot_block_to_cyclic",
     "determine_distributed_setup",
 ]

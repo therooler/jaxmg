@@ -7,12 +7,9 @@ theme:
         - navigation.instant
         - navigation.tabs
         - navigation.sections # Sections are included in the navigation on the left.
-        # - toc.integrate # Table of contents is integrated on the left; does not appear separately on the right.
         - header.autohide # header disappears as you scroll
     palette:
         # Light mode / dark mode
-        # We deliberately don't automatically use `media` to check a user's preferences. We default to light mode as
-        # (a) it looks more professional, and (b) is more obvious about the fact that it offers a (dark mode) toggle.
         - scheme: default
           primary: white
           accent: amber
@@ -33,7 +30,7 @@ theme:
 site_name: JAXMg
 site_description: The documentation for the jaxmg software library.
 site_author: Roeland Wiersema
-site_url: https://docs.kidger.site/jaxmg
+site_url: https://therooler.github.io/jaxmg
 
 repo_url: https://github.com/therooler/jaxmg
 repo_name: therooler/jaxmg
@@ -44,7 +41,7 @@ strict: true # Don't allow warnings during the build process
 extra_javascript:
     # The below two make MathJax work, see https://squidfunk.github.io/mkdocs-material/reference/mathjax/
     - _static/mathjax.js
-    - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+    - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
 
 extra_css:
     - _static/custom.css
@@ -97,7 +94,6 @@ nav:
         - "install.md"
     - Examples:
         - "examples/potrs_example.ipynb"
-        - "examples/potrs_shard_map.ipynb"
         - "examples/block_cyclic_data_layout.ipynb"
         - "examples/spmd_mpmd.ipynb"
     - API:
