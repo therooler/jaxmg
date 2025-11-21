@@ -17,24 +17,36 @@ if ! command -v mkdocs >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "[deploy_docs] building site..."
-mkdocs build
+echo "[deploy_docs] ensuring site worktree exists..."
+
+# Prevent accidentally committing site/ into the current branch's tree
+if git ls-files --error-unmatch "$SITE_DIR" >/dev/null 2>&1; then
+  echo "ERROR: '$SITE_DIR' appears tracked in the current branch. Aborting to avoid committing built site into main." >&2
+  echo "Remove '$SITE_DIR' from the current branch and add it to .gitignore, or run this script with a different SITE_DIR." >&2
+  exit 2
+fi
+
+# If the site worktree doesn't exist, create it and point it at the gh-pages branch (remote if available)
+if [ -d "$SITE_DIR" ] && git -C "$SITE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "[deploy_docs] found existing worktree at '$SITE_DIR'"
+else
+  echo "[deploy_docs] creating worktree at '$SITE_DIR' for branch '$BRANCH'..."
+  # Try to fetch the remote branch first. If it doesn't exist, create a new branch locally.
+  if git ls-remote --exit-code --heads "$REMOTE" "$BRANCH" >/dev/null 2>&1; then
+    git fetch "$REMOTE" "$BRANCH"
+    git worktree add -B "$BRANCH" "$SITE_DIR" "$REMOTE/$BRANCH"
+  else
+    git worktree add -B "$BRANCH" "$SITE_DIR"
+  fi
+fi
+
+echo "[deploy_docs] building site into worktree..."
+# Build directly into the site worktree directory to avoid creating a site/ folder on the main branch
+mkdocs build -d "$SITE_DIR"
 
 if [ ! -d "$SITE_DIR" ]; then
   echo "Site directory '$SITE_DIR' not found after build." >&2
   exit 1
-fi
-
-if ! git -C "$SITE_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  cat >&2 <<EOF
-Directory '$SITE_DIR' is not a git worktree for this repository.
-You can create the worktree with a command like:
-
-  git worktree add -B $BRANCH $SITE_DIR $REMOTE/$BRANCH
-
-This will create (or reset) the worktree branch to track the remote branch.
-EOF
-  exit 2
 fi
 
 echo "[deploy_docs] adding and committing changes in '$SITE_DIR'..."

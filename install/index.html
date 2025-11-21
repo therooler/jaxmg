@@ -12,13 +12,13 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://docs.kidger.site/jaxmg/api/">
+        <link rel="canonical" href="https://docs.kidger.site/jaxmg/install/">
       
       
-        <link rel="prev" href="../examples/spmd_mpmd/">
+        <link rel="prev" href="..">
       
       
-        <link rel="next" href="potrs/">
+        <link rel="next" href="../examples/potrs_example/">
       
       
       <link rel="icon" href="../_static/square.png">
@@ -26,7 +26,7 @@
     
     
       
-        <title>API Reference - JAXMg</title>
+        <title>Installation - JAXMg</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#api-reference" class="md-skip">
+        <a href="#installation" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              API Reference
+              Installation
             
           </span>
         </div>
@@ -226,10 +226,12 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
+      <li class="md-tabs__item md-tabs__item--active">
         <a href=".." class="md-tabs__link">
           
   
@@ -266,13 +268,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../api/" class="md-tabs__link">
           
   
   
@@ -352,26 +352,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_1" checked>
         
           
-          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_1" id="__nav_1_label" tabindex="">
             
   
   
@@ -384,7 +389,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_1_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_1">
             <span class="md-nav__icon md-icon"></span>
             Home
@@ -418,10 +423,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../install/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -432,6 +446,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -590,31 +605,26 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
         
           
-          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
             
   
   
@@ -627,7 +637,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3">
             <span class="md-nav__icon md-icon"></span>
             API
@@ -638,32 +648,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-        <label class="md-nav__link md-nav__link--active" for="__toc">
-          
-  
-  
-  <span class="md-ellipsis">
-    API Reference
-    
-  </span>
-  
-
-          <span class="md-nav__icon md-icon"></span>
-        </label>
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../api/" class="md-nav__link">
         
   
   
@@ -674,53 +662,6 @@
   
 
       </a>
-      
-        
-
-<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
-  
-  
-  
-    
-  
-  
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#potrs" class="md-nav__link">
-    <span class="md-ellipsis">
-      potrs
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#potri" class="md-nav__link">
-    <span class="md-ellipsis">
-      potri
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#syevd" class="md-nav__link">
-    <span class="md-ellipsis">
-      syevd
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
-</nav>
-      
     </li>
   
 
@@ -733,7 +674,7 @@
   
   
     <li class="md-nav__item">
-      <a href="potrs/" class="md-nav__link">
+      <a href="../api/potrs/" class="md-nav__link">
         
   
   
@@ -756,7 +697,7 @@
   
   
     <li class="md-nav__item">
-      <a href="potri/" class="md-nav__link">
+      <a href="../api/potri/" class="md-nav__link">
         
   
   
@@ -779,7 +720,7 @@
   
   
     <li class="md-nav__item">
-      <a href="syevd/" class="md-nav__link">
+      <a href="../api/syevd/" class="md-nav__link">
         
   
   
@@ -918,41 +859,6 @@
     
   
   
-    <label class="md-nav__title" for="__toc">
-      <span class="md-nav__icon md-icon"></span>
-      Table of contents
-    </label>
-    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
-      
-        <li class="md-nav__item">
-  <a href="#potrs" class="md-nav__link">
-    <span class="md-ellipsis">
-      potrs
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#potri" class="md-nav__link">
-    <span class="md-ellipsis">
-      potri
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#syevd" class="md-nav__link">
-    <span class="md-ellipsis">
-      syevd
-    </span>
-  </a>
-  
-</li>
-      
-    </ul>
-  
 </nav>
                   </div>
                 </div>
@@ -967,41 +873,19 @@
 
 
 
-<h1 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">¤</a></h1>
-<p>This page highlights the three primary public functions from the <code>jaxmg</code> package. Supported datatypes
-are <code>jax.numpy.float32</code>, <code>jax.numpy.float64</code>, <code>jax.numpy.complex64</code> and <code>jax.numpy.complex128</code>.</p>
-<p>All multi-GPU solvers in called by JAXMg expect a 1D block-cyclic column layout at the device level
-— a tiled, round-robin distribution of columns across devices driven by the tile width <code>T_A</code> used by the native kernels. 
-The conversion between the natural row-sharded JAX input and the 1D block-cyclic layout is performed
-internally in the C++/CUDA layer. Users can pass normal row-sharded matrices to the
-high-level functions; the library handles the remapping and padding required by the native kernels so you don't have to manage the cyclic layout yourself.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>The user must supply a tile width <code>T_A</code> to the solvers. Choose <code>T_A</code> carefully: very small values (e.g. &lt; 128) can make the native kernels much slower. Furthermore, if the shard size of the matrix is not a multiple of <code>T_A</code> we must add per-device padding to fit the last tile — that padding requires copying data and increases memory use and runtime. In short: prefer a reasonably large <code>T_A</code> (&gt;=128) and, where possible, pick <code>T_A</code> so that your shard size is an exact multiple to avoid copying and unnecessary slowdown.</p>
-</div>
-<h2 id="potrs">potrs<a class="headerlink" href="#potrs" title="Permanent link">¤</a></h2>
-<p>Multi-GPU Cholesky linear solver for symmetric (Hermitian) positive-definite matrices.</p>
-<div class="arithmatex">\[
-A x = B, \quad A = L L^{\top} \;\text{(real)} \quad \text{or} \quad A = L L^{\dagger}\;\text{(complex)}
-\]</div>
-<p>Solve for <span class="arithmatex">\(x\)</span> using the Cholesky factors.</p>
-<p><a href="potrs/">Full potrs module →</a></p>
-<hr />
-<h2 id="potri">potri<a class="headerlink" href="#potri" title="Permanent link">¤</a></h2>
-<p>Multi-GPU matrix inversion helper for symmetric (Hermitian) positive-definite matrices.</p>
-<div class="arithmatex">\[
-A^{-1} = (L L^{\top})^{-1} = L^{-\top} L^{-1} \quad\text{(real)}\quad\text{or}\quad A^{-1} = L^{-\dagger} L^{-1} \;\text{(complex)}
-\]</div>
-<p>Compute the inverse (or the upper-triangular part) of using Cholesky the Cholesky factors.</p>
-<p><a href="potri/">Full potri module →</a></p>
-<hr />
-<h2 id="syevd">syevd<a class="headerlink" href="#syevd" title="Permanent link">¤</a></h2>
-<p>Multi-GPU eigensolver for symmetric (Hermitian) matrices.</p>
-<div class="arithmatex">\[
-A v = \lambda v \quad\Rightarrow\quad A = V \Lambda V^{\top} \;\text{(real)}\quad\text{or}\quad A = V \Lambda V^{\dagger} \;\text{(complex)}
-\]</div>
-<p>Compute eigenvalues <span class="arithmatex">\(\Lambda\)</span> and (optionally) eigenvectors <span class="arithmatex">\(V\)</span> of a symmetric (Hermitian) matrix.</p>
-<p><a href="syevd/">Full syevd module →</a></p>
+<h1 id="installation">Installation<a class="headerlink" href="#installation" title="Permanent link">¤</a></h1>
+<p>Clone the repository and install with:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span><span class="s2">&quot;.[cuda]&quot;</span>
+</code></pre></div>
+<p>This will install a GPU compatible version of JAX. </p>
+<p>To verify the installation (requires at least one GPU):</p>
+<p><div class="highlight"><pre><span></span><code>pytest<span class="w"> </span>
+</code></pre></div>
+There are two types of tests:</p>
+<ol>
+<li>SPMD tests: Single Process Multiple GPU tests.</li>
+<li>MPMD: Multiple Processes Multiple GPU tests.</li>
+</ol>
 
 
 
