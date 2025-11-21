@@ -12,13 +12,13 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://docs.kidger.site/jaxmg/examples/potrs_example/">
+        <link rel="canonical" href="https://therooler.github.io/jaxmg/examples/potrs_example/">
       
       
         <link rel="prev" href="../../install/">
       
       
-        <link rel="next" href="../potrs_shard_map/">
+        <link rel="next" href="../block_cyclic_data_layout/">
       
       
       <link rel="icon" href="../../_static/square.png">
@@ -532,35 +532,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../potrs_shard_map/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Calling the solver in a jax.shard_map context
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
-  
-  
-    <li class="md-nav__item">
       <a href="../block_cyclic_data_layout/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    Block-cyclic data layout
+    The importance of Tile size: Performance of the eigensolver
     
   </span>
   
@@ -876,36 +853,100 @@
 <h1 id="cholesky-decomposition-with-jaxmgpotrs">Cholesky decomposition with jaxmg.potrs<a class="headerlink" href="#cholesky-decomposition-with-jaxmgpotrs" title="Permanent link">¤</a></h1>
 <p>Here, we give an example of calling <code>jax.potrs</code>, which solves the linear system of equations <span class="arithmatex">\(Ax=b\)</span> for symmetric, positive-definite <span class="arithmatex">\(A\)</span> via a Cholesky decomposition.</p>
 <p>The interface of <code>jaxmg.potrs</code> is simple to use; one needs to supply to underlying mesh of the sharded data and specify the input shardings:</p>
-<div class="highlight"><pre><span></span><code><span class="c1"># examples/readme.py</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
 <span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionSpec</span> <span class="k">as</span> <span class="n">P</span><span class="p">,</span> <span class="n">NamedSharding</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">potrs</span>
-
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="c1"># Assumes we have at least one GPU available</span>
 <span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
-<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="s2">&quot;Example only works for 1 or 2 devices&quot;</span>
 <span class="n">N</span> <span class="o">=</span> <span class="mi">12</span>
-<span class="n">T_A</span> <span class="o">=</span> <span class="mi">2</span>
+<span class="n">T_A</span> <span class="o">=</span> <span class="mi">3</span>
 <span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
 <span class="c1"># Create diagonal matrix and `b` all equal to one</span>
 <span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 <span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
 <span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
-<span class="c1"># Make mesh and place data (columns sharded)</span>
+<span class="c1"># Make mesh and place data (rows sharded)</span>
 <span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)))</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
 <span class="n">b</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
 <span class="c1"># Call potrs</span>
-<span class="n">out</span> <span class="o">=</span> <span class="n">potrs</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">potrs</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
 <span class="n">expected_out</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
 <span class="nb">print</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">expected_out</span><span class="p">))</span>
 </code></pre></div>
-<p>Note that we did not have to perform the cyclic relayout here since <code>jaxmg.potrs</code> calls <code>cyclic_1d_layout</code> before calling the solver.</p>
-<blockquote>
-<p><strong>Note:</strong> If the user can ensure that the matrix <code>A</code> is already in block cyclic form, then <code>jaxmg.potrs</code> can be called with the argument <code>cyclic_1d=True</code> (<code>False</code> by default). If the data is not laid out correctly, then calling <code>jaxmg.potrs</code> will result in an array of <code>NaN</code>s and a nonzero status, indicating the failure of solver.</p>
-</blockquote>
+<div class="highlight"><pre><span></span><code>mkdir -p failed for path /home/rwiersema/.cache/matplotlib: [Errno 13] Permission denied: &#39;/home/rwiersema&#39;
+Matplotlib created a temporary cache directory at /tmp/matplotlib-kkpjcj85 because there was an issue with the default path (/home/rwiersema/.cache/matplotlib); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>Devices: [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2)]
+[[1.        ]
+ [0.5       ]
+ [0.33333333]
+ [0.25      ]
+ [0.2       ]
+ [0.16666667]
+ [0.14285714]
+ [0.125     ]
+ [0.11111111]
+ [0.1       ]
+ [0.09090909]
+ [0.08333333]]
+True
+</code></pre></div>
+<p>We retrieve the inverse of the diagonal since we set <span class="arithmatex">\(b\)</span> equal to a vector of ones. </p>
+<p>The API <code>jaxmg.potrs</code> is useful if you are not working in a <code>jax.shard_map</code> context, since <code>jaxmg.potrs</code> takes care of the shard map for you. However, in a typical application we may already be working in a sharded context. We therefore provide an
+additional API that can be called from such a context.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">potrs_shardmap_ctx</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">shard_mapped_fn</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">):</span>
+    <span class="n">_a</span> <span class="o">=</span> <span class="n">_a</span> <span class="o">*</span> <span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">axis_index</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># Multiply each shard with the axis number</span>
+    <span class="k">return</span> <span class="n">potrs_shardmap_ctx</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">)</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">my_fn</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">):</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">shard_map</span><span class="p">(</span>
+        <span class="n">partial</span><span class="p">(</span><span class="n">shard_mapped_fn</span><span class="p">,</span> <span class="n">_T_A</span><span class="o">=</span><span class="n">_T_A</span><span class="p">),</span>
+        <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span>
+        <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
+        <span class="n">out_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">)),</span> <span class="c1"># we always return a status.</span>
+        <span class="n">check_vma</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="c1"># Assumes we have at least one GPU available</span>
+<span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">6</span>
+<span class="n">T_A</span> <span class="o">=</span> <span class="mi">1</span>
+<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float32</span>
+<span class="c1"># Create diagonal matrix</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+<span class="c1"># Make mesh and place data (rows sharded)</span>
+<span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="n">b</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
+<span class="c1"># Call potrs</span>
+<span class="n">out</span><span class="p">,</span> <span class="n">status</span> <span class="o">=</span> <span class="n">my_fn</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">())</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Solver status: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>Devices: [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2)]
+[[1.        ]
+ [1.        ]
+ [0.49999997]
+ [0.49999997]
+ [0.3333333 ]
+ [0.3333333 ]]
+Solver status: [0]
+</code></pre></div>
+<p>After multiplying the diagonal with the axis number <code>"x"</code> we get the the expected solution <span class="arithmatex">\((1,1,\frac{1}{2},\frac{1}{2},\frac{1}{3},\frac{1}{3})\)</span></p>
 
 
 
@@ -967,7 +1008,7 @@
       
         <script src="../../_static/mathjax.js"></script>
       
-        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>

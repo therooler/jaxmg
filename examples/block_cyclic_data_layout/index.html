@@ -12,10 +12,10 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://docs.kidger.site/jaxmg/examples/block_cyclic_data_layout/">
+        <link rel="canonical" href="https://therooler.github.io/jaxmg/examples/block_cyclic_data_layout/">
       
       
-        <link rel="prev" href="../potrs_shard_map/">
+        <link rel="prev" href="../potrs_example/">
       
       
         <link rel="next" href="../spmd_mpmd/">
@@ -26,7 +26,7 @@
     
     
       
-        <title>Block-cyclic data layout - JAXMg</title>
+        <title>The importance of Tile size: Performance of the eigensolver - JAXMg</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#block-cyclic-data-layout" class="md-skip">
+        <a href="#the-importance-of-tile-size-performance-of-the-eigensolver" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Block-cyclic data layout
+              The importance of Tile size: Performance of the eigensolver
             
           </span>
         </div>
@@ -519,29 +519,6 @@
                 
   
   
-  
-  
-    <li class="md-nav__item">
-      <a href="../potrs_shard_map/" class="md-nav__link">
-        
-  
-  
-  <span class="md-ellipsis">
-    Calling the solver in a jax.shard_map context
-    
-  </span>
-  
-
-      </a>
-    </li>
-  
-
-              
-            
-              
-                
-  
-  
     
   
   
@@ -559,7 +536,7 @@
   
   
   <span class="md-ellipsis">
-    Block-cyclic data layout
+    The importance of Tile size: Performance of the eigensolver
     
   </span>
   
@@ -873,46 +850,89 @@
 
 
 
-<h1 id="block-cyclic-data-layout">Block-cyclic data layout<a class="headerlink" href="#block-cyclic-data-layout" title="Permanent link">¤</a></h1>
-<p>To use cuSolverMg, matrices must be stored in <strong>1D block-cyclic, column-major form</strong>. The reason for this is to ensure that all devices participating in a specific routine can perform computations without being blocked by other parts of the computation (see Dongarra 1996). In <code>jaxmg</code>, we handles this transformation on the JAX side with a single <strong>all-to-all</strong> within a <code>jax.shard_map</code> context.</p>
-<p>Consider the case where we have 2 GPUs available and we are trying to solve the linear 
-system <span class="arithmatex">\(A\cdot x =b\)</span>, where <span class="arithmatex">\(A\)</span> is an <span class="arithmatex">\(12\times12\)</span>, positive-definite matrix and <span class="arithmatex">\(b\)</span> corresponds to a vector of ones. Every shard on each GPU will be of size <span class="arithmatex">\(12\times 6\)</span>.
-We require a cyclic 1D tiling with tile size <code>T_A=2</code> for <code>cuSolverMg</code> to work:</p>
-<p align="center"><img src="../../_static/mat_example.png" alt="Matrix layout illustration" width="500"></p>
-
-<p>In order to interweave the blocks, we need to ensure that each shard is a multiple of
-<code>ndev * T_A = 2</code>, so that we can reshape to <code>(ndev, T_A, ...)</code> and exchange the blocks via <code>jax.lax.all_to_all</code>. We therefore add zero padding of 2 columns to each shard (see top figure). After interweaving the blocks, we are left with extra padding on the right, which we ignore in the solver itself. After the solver is called, we again use a
-single <code>jax.lax.all_to_all</code> call to remap the data back to block-sharded form. </p>
-<p>We can achieve this layout in <code>jaxmg</code> with the following code:</p>
+<h1 id="the-importance-of-tile-size-performance-of-the-eigensolver">The importance of Tile size: Performance of the eigensolver<a class="headerlink" href="#the-importance-of-tile-size-performance-of-the-eigensolver" title="Permanent link">¤</a></h1>
+<p>To use cuSolverMg, matrices must be stored in <strong>1D block-cyclic, column-major form</strong>. The reason for this is to ensure that all devices participating in a specific routine can perform computations without being blocked by other parts of the computation (see Dongarra 1996). In <code>jaxmg</code>, we perform this transformation on the C++/CUDA level for you.</p>
+<p>Choosing the tile size to be large enough is crucial for performance, as we will illustrate here. To get an idea of what the tiling looks like, consider the example where we
+have a <span class="arithmatex">\(100\times100\)</span> matrix distributed with tile size <code>T_A=7</code> over 4 GPUS. We can plot what the tiling will look like.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">plot_block_to_cyclic</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">T_A</span> <span class="o">=</span> <span class="mi">7</span>
+<span class="n">ndev</span> <span class="o">=</span> <span class="mi">4</span>
+<span class="n">plot_block_to_cyclic</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">T_A</span><span class="p">,</span> <span class="n">ndev</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>(&lt;Figure size 800x600 with 2 Axes&gt;,
+ array([&lt;Axes: title={&#39;center&#39;: &#39;Column-block sharded (shard_size=25, required padding=3)&#39;}, xlabel=&#39;Columns&#39;, ylabel=&#39;Rows&#39;&gt;,
+        &lt;Axes: title={&#39;center&#39;: &#39;1D block-cyclic (tile size = 7)&#39;}, xlabel=&#39;Columns&#39;, ylabel=&#39;Rows&#39;&gt;],
+       dtype=object))
+</code></pre></div>
+<p><img alt="img" src="../_data/e2925ae0493c4840a216e748161ceec1.png" /></p>
+<p>Notice how we need to add extra padding to ensure that each GPU contains a number of columns that is a multiple of <code>T_A</code> (required by CusolverMg).
+When matrices get larger, it is important to choose <code>T_A</code> to be large enough, since the solver will slow down otherwise. Here we explore this impact for a setup with 3 GPUs.
+By increasing the tile size, we see that the performance saturates.</p>
 <div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
 <span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionSpec</span> <span class="k">as</span> <span class="n">P</span><span class="p">,</span> <span class="n">NamedSharding</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">cyclic_1d_layout</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">syevd</span>
 
+<span class="kn">import</span><span class="w"> </span><span class="nn">matplotlib.pyplot</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">plt</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 <span class="c1"># Assumes we have at least one GPU available</span>
 <span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
-<span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span> <span class="ow">in</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">],</span> <span class="s2">&quot;Example only works for 1 or 2 devices&quot;</span>
-<span class="n">N</span> <span class="o">=</span> <span class="mi">12</span>
-<span class="n">T_A</span> <span class="o">=</span> <span class="mi">2</span>
-<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float32</span>
-<span class="n">ndev</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_count</span><span class="p">()</span>
-<span class="c1"># Create diagonal matrix and `b` all equal to one</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
+<span class="n">N</span> <span class="o">=</span> <span class="mi">3</span><span class="o">**</span><span class="mi">7</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;N=</span><span class="si">{</span><span class="n">N</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
+<span class="c1"># Create random </span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">normal</span><span class="p">(</span><span class="n">key</span><span class="o">=</span><span class="n">jax</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">key</span><span class="p">(</span><span class="mi">100</span><span class="p">),</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="n">N</span><span class="p">,</span><span class="n">N</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<span class="n">A</span> <span class="o">=</span> <span class="n">A</span> <span class="o">+</span> <span class="n">A</span><span class="o">.</span><span class="n">T</span> 
+<span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+<span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
+<span class="c1"># Make mesh and place data (rows sharded)</span>
 <span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;x&quot;</span><span class="p">)))</span>
-<span class="n">A_bc</span> <span class="o">=</span> <span class="n">cyclic_1d_layout</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">T_A</span><span class="p">)</span>
-
-<span class="k">for</span> <span class="n">shard</span> <span class="ow">in</span> <span class="n">A_bc</span><span class="o">.</span><span class="n">addressable_shards</span><span class="p">:</span>
-    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;shard</span><span class="si">{</span><span class="n">shard</span><span class="o">.</span><span class="n">data</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+<span class="c1"># Call syevd</span>
+<span class="n">times</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="n">tile_sizes</span> <span class="o">=</span> <span class="p">[</span><span class="mi">2</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">128</span><span class="p">,</span> <span class="mi">256</span><span class="p">]</span>
+<span class="k">for</span> <span class="n">T_A</span> <span class="ow">in</span> <span class="n">tile_sizes</span><span class="p">:</span>
+    <span class="n">Adev</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+    <span class="n">start</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">ev</span><span class="p">,</span> <span class="n">V</span><span class="p">,</span> <span class="n">status</span><span class="o">=</span> <span class="n">syevd</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),),</span> <span class="n">return_status</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">ev</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+    <span class="n">V</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">()</span>
+    <span class="n">end</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+    <span class="n">times</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">end</span><span class="o">-</span><span class="n">start</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Status </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2"> - Elapsed time </span><span class="si">{</span><span class="n">end</span><span class="w"> </span><span class="o">-</span><span class="w"> </span><span class="n">start</span><span class="si">:</span><span class="s2">1.5f</span><span class="si">}</span><span class="s2">[s]&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">tile_sizes</span><span class="p">,</span> <span class="n">times</span><span class="p">,</span> <span class="n">marker</span><span class="o">=</span><span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">markersize</span><span class="o">=</span><span class="mi">10</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">xlabel</span><span class="p">(</span><span class="s2">&quot;T_A&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">ylabel</span><span class="p">(</span><span class="s2">&quot;Time [s]&quot;</span><span class="p">)</span>
+<span class="n">plt</span><span class="o">.</span><span class="n">grid</span><span class="p">()</span>
 </code></pre></div>
-<p>A more involved example is the case where we have 4 GPUS, <code>N=100</code> and we want a tiling of <code>T_A=4</code>. 
-Now we need a padding of 7 on each GPU in order to perform data remappping (produced with above code):</p>
-<p align="center"><img src="../../_static/mat.png" alt="Matrix layout illustration" width="500"></p>
-
-<ul>
-<li>Dongarra, J.J., and D.W. Walker. <em>The Design of Linear Algebra Libraries for High Performance Computers.</em> Office of Scientific and Technical Information (OSTI), August 1, 1993. https://doi.org/10.2172/10184308.</li>
-</ul>
+<div class="highlight"><pre><span></span><code>Devices: [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2)]
+N=2187
+Status 0 - Elapsed time 11.42180[s]
+Status 0 - Elapsed time 0.89933[s]
+Status 0 - Elapsed time 0.77534[s]
+Status 0 - Elapsed time 0.72692[s]
+Status 0 - Elapsed time 0.72381[s]
+</code></pre></div>
+<p><img alt="img" src="../_data/42903ef2ecf346ae961507ac08183564.png" /></p>
+<p>Notice that there is a massive slowdown for <code>T_A=2</code>. </p>
+<p>When we choose T_A, we want to make sure that we can equally pad each shard. For example, choosing <code>T_A=3**6</code> for a matrix of size <code>N=3**9</code> will ensure that we can pad it evenly.</p>
+<div class="highlight"><pre><span></span><code><span class="n">N</span> <span class="o">=</span> <span class="mi">3</span><span class="o">**</span><span class="mi">9</span>
+<span class="n">T_A</span> <span class="o">=</span> <span class="mi">3</span><span class="o">**</span><span class="mi">6</span>
+<span class="n">ndev</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">plot_block_to_cyclic</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">T_A</span><span class="p">,</span> <span class="n">ndev</span><span class="p">)</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>(&lt;Figure size 800x600 with 2 Axes&gt;,
+ array([&lt;Axes: title={&#39;center&#39;: &#39;Column-block sharded (shard_size=6561, required padding=0)&#39;}, xlabel=&#39;Columns&#39;, ylabel=&#39;Rows&#39;&gt;,
+        &lt;Axes: title={&#39;center&#39;: &#39;1D block-cyclic (tile size = 729)&#39;}, xlabel=&#39;Columns&#39;, ylabel=&#39;Rows&#39;&gt;],
+       dtype=object))
+</code></pre></div>
+<p><img alt="img" src="../_data/825ed3cf18b54099b440727011ba14c8.png" /></p>
+<p>This avoids creating an additional copy of the matrix that is properly padded. </p>
+<div class="highlight"><pre><span></span><code>
+</code></pre></div>
 
 
 
@@ -974,7 +994,7 @@ Now we need a padding of 7 on each GPU in order to perform data remappping (prod
       
         <script src="../../_static/mathjax.js"></script>
       
-        <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+        <script src="https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"></script>
       
     
   </body>
