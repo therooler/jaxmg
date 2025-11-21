@@ -12,7 +12,15 @@ on:
     branches: [ main ]
     paths:
       - 'docs/**'
+      - 'src/jaxmg/**'
       - 'mkdocs.yml'
+      - 'pyproject.toml'         # optional, if docs dependencies live here
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'src/jaxmg/**'
+      - 'mkdocs.yml'
+      - 'pyproject.toml'
   workflow_dispatch:
 
 jobs:
