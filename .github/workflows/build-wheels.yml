@@ -74,6 +74,12 @@ jobs:
             ls -la /usr/local/cuda/lib64/ | grep -i cusolver || echo "No cusolver libs found"
             find /usr/local/cuda -name "*cusolverMg*" || echo "cusolverMg not found"
 
+            # Check CUPTI location
+            echo "=== Looking for CUPTI ==="
+            find /usr/local/cuda -name "cupti.h" 2>/dev/null || echo "cupti.h not found in /usr/local/cuda"
+            ls -la /usr/local/cuda/extras/ 2>/dev/null || echo "No extras directory"
+            ls -la /usr/local/cuda/include/ | grep -i cupti || echo "No CUPTI in include"
+
           # Set environment variables for the build
           CIBW_ENVIRONMENT: |
             CUDA_ROOT=/usr/local/cuda
