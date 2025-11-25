@@ -1,0 +1,132 @@
+name: Build CUDA Wheels
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths:
+      - '.github/workflows/build-wheels.yml'
+      - 'pyproject.toml'
+      - 'CMakeLists.txt'
+      - 'src/cuda/**'
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: Build wheels on Linux
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.16.2
+
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
+        env:
+          # Only build for CPython 3.9, 3.10, 3.11, 3.12 on Linux x86_64
+          CIBW_BUILD: "cp39-manylinux_x86_64 cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64"
+
+          # Skip PyPy, musllinux, Windows, and macOS
+          CIBW_SKIP: "pp* *-musllinux_*"
+
+          # Use manylinux_2_28 for GCC 11 support
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+
+          # Install CUDA Toolkit and dependencies before building all wheels
+          CIBW_BEFORE_ALL_LINUX: |
+            set -ex
+
+            # Install basic dependencies
+            yum install -y wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++
+
+            # Enable GCC 11
+            source /opt/rh/gcc-toolset-11/enable
+
+            # Install CUDA Toolkit 12.8
+            wget https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
+            rpm -i cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
+            yum clean all
+            yum -y install cuda-toolkit-12-8
+
+            # Install cuDNN 9.2 (requires NVIDIA developer account, using public link if available)
+            # Note: This may need to be updated with actual cuDNN installation
+            # For now, we'll download from a specific location
+            wget https://developer.download.nvidia.com/compute/cudnn/9.2.0/local_installers/cudnn-linux-x86_64-9.2.0.82_cuda12-archive.tar.xz
+            tar -xf cudnn-linux-x86_64-9.2.0.82_cuda12-archive.tar.xz
+            cp -r cudnn-linux-x86_64-9.2.0.82_cuda12-archive /usr/local/cudnn-9.2
+
+            # Verify installations
+            ls -la /usr/local/cuda-12.8/
+            ls -la /usr/local/cudnn-9.2/
+
+          # Set environment variables for the build
+          CIBW_ENVIRONMENT: |
+            CUDA_ROOT=/usr/local/cuda-12.8
+            CUDNN_ROOT=/usr/local/cudnn-9.2
+            PATH=/usr/local/cuda-12.8/bin:$PATH
+            LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+
+          # Build the CUDA libraries before building the wheel
+          CIBW_BEFORE_BUILD: |
+            set -ex
+
+            # Enable GCC 11
+            source /opt/rh/gcc-toolset-11/enable
+
+            # Set environment variables
+            export CUDA_ROOT=/usr/local/cuda-12.8
+            export CUDNN_ROOT=/usr/local/cudnn-9.2
+            export PATH=/usr/local/cuda-12.8/bin:$PATH
+            export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+
+            # Build using CMake
+            mkdir -p build
+            cd build
+            cmake3 -DCMAKE_BUILD_TYPE=Release ..
+            cmake3 --build . --target install -- -j$(nproc)
+            cd ..
+
+            # Verify the shared libraries were built
+            ls -la src/jaxmg/bin/
+
+          # Custom auditwheel repair to exclude CUDA libraries
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
+            auditwheel repair -w {dest_dir} {wheel} \
+              --exclude libcusolver.so.12 \
+              --exclude libcusolverMg.so.12 \
+              --exclude libcudart.so.12 \
+              --exclude libcublas.so.12 \
+              --exclude libcublasLt.so.12 \
+              --exclude libcupti.so.12 \
+              --exclude libcuda.so.1 \
+              --exclude libcudnn.so.9
+
+          # Run tests after building (optional, requires GPU in CI)
+          # CIBW_TEST_COMMAND: "pytest {project}/tests"
+          # For now, skip tests as they require GPU
+          CIBW_TEST_SKIP: "*"
+
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: jaxmg-wheels-${{ github.sha }}
+          path: ./wheelhouse/*.whl
+          retention-days: 30
+
+      - name: Display wheel info
+        run: |
+          ls -lh wheelhouse/
+          for wheel in wheelhouse/*.whl; do
+            echo "=== $wheel ==="
+            unzip -l "$wheel" | grep "\.so$" || echo "No .so files found"
+          done
