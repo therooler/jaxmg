@@ -94,6 +94,11 @@ jobs:
             export PATH=/usr/local/cuda/bin:$PATH
             export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
+            # Create required symlinks for JAX build (JAX expects CUDA at third_party/gpus/cuda)
+            mkdir -p third_party/gpus
+            ln -sfn /usr/local/cuda third_party/gpus/cuda
+            ls -la third_party/gpus/
+
             # Build using CMake
             mkdir -p build
             cd build
