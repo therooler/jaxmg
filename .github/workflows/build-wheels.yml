@@ -47,7 +47,7 @@ jobs:
             set -ex
 
             # Install basic dependencies (--nogpgcheck to skip GPG verification in manylinux container)
-            yum install -y --nogpgcheck wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++
+            yum install -y --nogpgcheck wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++ yum-utils
 
             # Enable GCC 11
             source /opt/rh/gcc-toolset-11/enable
