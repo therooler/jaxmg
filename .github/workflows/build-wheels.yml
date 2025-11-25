@@ -46,8 +46,8 @@ jobs:
           CIBW_BEFORE_ALL_LINUX: |
             set -ex
 
-            # Install basic dependencies
-            yum install -y wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++
+            # Install basic dependencies (--nogpgcheck to skip GPG verification in manylinux container)
+            yum install -y --nogpgcheck wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++
 
             # Enable GCC 11
             source /opt/rh/gcc-toolset-11/enable
@@ -56,7 +56,7 @@ jobs:
             wget https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
             rpm -i cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
             yum clean all
-            yum -y install cuda-toolkit-12-8
+            yum -y --nogpgcheck install cuda-toolkit-12-8
 
             # Install cuDNN 9.2 (requires NVIDIA developer account, using public link if available)
             # Note: This may need to be updated with actual cuDNN installation
