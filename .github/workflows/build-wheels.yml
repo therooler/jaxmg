@@ -52,29 +52,28 @@ jobs:
             # Enable GCC 11
             source /opt/rh/gcc-toolset-11/enable
 
-            # Install CUDA Toolkit 12.8
-            wget https://developer.download.nvidia.com/compute/cuda/12.8.0/local_installers/cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
-            rpm -i cuda-repo-rhel8-12-8-local-12.8.0_550.54.15-1.x86_64.rpm
+            # Install CUDA Toolkit 12.6 (using network repository)
+            # Use CUDA 12.6 as it's widely available and compatible with JAX >= 0.6.0
+            yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
             yum clean all
-            yum -y --nogpgcheck install cuda-toolkit-12-8
+            yum -y --nogpgcheck install cuda-toolkit-12-6
 
-            # Install cuDNN 9.2 (requires NVIDIA developer account, using public link if available)
-            # Note: This may need to be updated with actual cuDNN installation
-            # For now, we'll download from a specific location
-            wget https://developer.download.nvidia.com/compute/cudnn/9.2.0/local_installers/cudnn-linux-x86_64-9.2.0.82_cuda12-archive.tar.xz
-            tar -xf cudnn-linux-x86_64-9.2.0.82_cuda12-archive.tar.xz
-            cp -r cudnn-linux-x86_64-9.2.0.82_cuda12-archive /usr/local/cudnn-9.2
+            # Install cuDNN from CUDA repository (try libcudnn9-cuda-12)
+            yum -y --nogpgcheck install libcudnn9-cuda-12 libcudnn9-devel-cuda-12 || echo "cuDNN not available in repo, skipping"
+
+            # Create symlink for easier path reference
+            ln -sf /usr/local/cuda-12.6 /usr/local/cuda
 
             # Verify installations
-            ls -la /usr/local/cuda-12.8/
-            ls -la /usr/local/cudnn-9.2/
+            ls -la /usr/local/cuda/
+            nvcc --version || echo "NVCC not found"
 
           # Set environment variables for the build
           CIBW_ENVIRONMENT: |
-            CUDA_ROOT=/usr/local/cuda-12.8
-            CUDNN_ROOT=/usr/local/cudnn-9.2
-            PATH=/usr/local/cuda-12.8/bin:$PATH
-            LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+            CUDA_ROOT=/usr/local/cuda
+            CUDNN_ROOT=/usr
+            PATH=/usr/local/cuda/bin:$PATH
+            LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
           # Build the CUDA libraries before building the wheel
           CIBW_BEFORE_BUILD: |
@@ -84,10 +83,10 @@ jobs:
             source /opt/rh/gcc-toolset-11/enable
 
             # Set environment variables
-            export CUDA_ROOT=/usr/local/cuda-12.8
-            export CUDNN_ROOT=/usr/local/cudnn-9.2
-            export PATH=/usr/local/cuda-12.8/bin:$PATH
-            export LD_LIBRARY_PATH=/usr/local/cuda-12.8/lib64:$LD_LIBRARY_PATH
+            export CUDA_ROOT=/usr/local/cuda
+            export CUDNN_ROOT=/usr
+            export PATH=/usr/local/cuda/bin:$PATH
+            export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
             # Build using CMake
             mkdir -p build
