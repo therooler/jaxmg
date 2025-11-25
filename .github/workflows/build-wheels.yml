@@ -76,9 +76,15 @@ jobs:
 
             # Check CUPTI location
             echo "=== Looking for CUPTI ==="
-            find /usr/local/cuda -name "cupti.h" 2>/dev/null || echo "cupti.h not found in /usr/local/cuda"
-            ls -la /usr/local/cuda/extras/ 2>/dev/null || echo "No extras directory"
-            ls -la /usr/local/cuda/include/ | grep -i cupti || echo "No CUPTI in include"
+            ls -la /usr/local/cuda/extras/CUPTI/ 2>/dev/null || echo "No CUPTI extras"
+            ls -la /usr/local/cuda/extras/CUPTI/include/ 2>/dev/null || echo "No CUPTI include in extras"
+
+            # CUPTI headers are in /usr/local/cuda/include/, not extras/CUPTI/include/
+            # Create symlink from extras/CUPTI/include to main include directory
+            mkdir -p /usr/local/cuda/extras/CUPTI
+            ln -sfn /usr/local/cuda/include /usr/local/cuda/extras/CUPTI/include
+            echo "Created CUPTI symlink:"
+            ls -la /usr/local/cuda/extras/CUPTI/include/cupti*.h
 
           # Set environment variables for the build
           CIBW_ENVIRONMENT: |
