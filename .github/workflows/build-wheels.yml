@@ -33,8 +33,8 @@ jobs:
       - name: Build wheels
         run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          # Only build for CPython 3.9, 3.10, 3.11, 3.12 on Linux x86_64
-          CIBW_BUILD: "cp39-manylinux_x86_64 cp310-manylinux_x86_64 cp311-manylinux_x86_64 cp312-manylinux_x86_64"
+          # Only build for CPython 3.11, 3.12, 3.13, 3.14 on Linux x86_64
+          CIBW_BUILD: "cp311-manylinux_x86_64 cp312-manylinux_x86_64 cp313-manylinux_x86_64 cp314-manylinux_x86_64"
 
           # Skip PyPy, musllinux, Windows, and macOS
           CIBW_SKIP: "pp* *-musllinux_*"
