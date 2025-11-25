@@ -56,8 +56,8 @@ jobs:
             # Use CUDA 12.6 as it's widely available and compatible with JAX >= 0.6.0
             yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
             yum clean all
-            # Install core CUDA toolkit and specific libraries needed
-            yum -y --nogpgcheck install cuda-toolkit-12-6 cuda-cusolver-12-6 cuda-cupti-12-6
+            # Install core CUDA toolkit (includes all libraries)
+            yum -y --nogpgcheck install cuda-toolkit-12-6
 
             # Install cuDNN from CUDA repository (try libcudnn9-cuda-12)
             yum -y --nogpgcheck install libcudnn9-cuda-12 libcudnn9-devel-cuda-12 || echo "cuDNN not available in repo, skipping"
