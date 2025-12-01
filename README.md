@@ -28,13 +28,12 @@ The provided binary is compiled with:
 !!! Compatibility
     We require JAX>=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
 
-
 ## Installation
 
 Clone the repository and install with:
 
 ```bash
-pip install ".[cuda]"
+pip install jaxmg
 ```
 
 This will install a GPU compatible version of JAX. 
