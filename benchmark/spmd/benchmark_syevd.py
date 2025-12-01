@@ -1,6 +1,6 @@
 import os
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 import subprocess
 from pathlib import Path
 
@@ -18,11 +18,9 @@ import jax.numpy as jnp
 from functools import partial
 from jax.sharding import PartitionSpec as P, NamedSharding
 
-from jaxmg import potrs
+from jaxmg import syevd
 
-import re
 from pathlib import Path
-import matplotlib.pyplot as plt
 
 dtype = jnp.float64
 devices = jax.devices("gpu")
@@ -30,7 +28,7 @@ ndev = len(devices)
 
 n_runs = 5
 
-def main_potrs(N, T_A):
+def main_syevd(N, T_A):
 
     print(f"Available devices: {ndev}")
     gpu_name = ""
@@ -45,7 +43,7 @@ def main_potrs(N, T_A):
     gpu_name = "_".join(gpu_name.split(" "))
     # PARAMETERS
     NRHS = 1
-    save_path = f"{Path(__file__).parent}/data_potrs/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
+    save_path = f"{Path(__file__).parent}/data_syevd/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     file_name = f"N_{N}_T_A_{T_A}"
@@ -57,7 +55,6 @@ def main_potrs(N, T_A):
     print(f"N={N}, T_A={T_A}, dtype={dtype}")
     print(jnp.dtype(dtype).itemsize)
     print(f"Memory allocated: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
-    print(f"Memory allocated tile: {N*T_A*jnp.dtype(dtype).itemsize/1e9} GB")
 
     # MESH
     shard_size = N // ndev
@@ -88,25 +85,23 @@ def main_potrs(N, T_A):
             jnp.diag(jnp.arange(N, dtype=dtype) + 1), NamedSharding(mesh, P("x", None,))
         )
 
-    myfn = jax.jit(partial(potrs, mesh=mesh, in_specs=(P("x", None), P(None, None))), static_argnums=2)
+    myfn = jax.jit(partial(syevd, mesh=mesh, in_specs=(P("x", None))), static_argnums=1)
 
     @jax.jit
     def run_once():
         A = make_diag()
-        b = jax.lax.with_sharding_constraint(
-            jnp.ones((N, NRHS), dtype=dtype), NamedSharding(mesh, P(None, None))
-        )
-        return A,b
+        return A
 
     times = []
     for run in range(n_runs + 1):
         print("Data allocated")
 
         start = time.time()
-        A,b = run_once()
+        A = run_once()
         A.block_until_ready()
-        out = myfn(A, b, T_A)
-        out.block_until_ready()
+        ev, V  = myfn(A, T_A)
+        ev.block_until_ready()
+        V.block_until_ready()
         end = time.time()
         if run > 0:  # skip jitted run
             times.append(end - start)
@@ -116,7 +111,7 @@ def main_potrs(N, T_A):
     return np.array(times)
 
 
-def main_cho_solve(N):
+def main_eigh(N):
 
     print(f"Available devices: {ndev}")
     gpu_name = ""
@@ -131,7 +126,7 @@ def main_cho_solve(N):
     gpu_name = "_".join(gpu_name.split(" "))
     # PARAMETERS
     NRHS = 1
-    save_path = f"{Path(__file__).parent}/data_potrs/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
+    save_path = f"{Path(__file__).parent}/data_syevd/{gpu_name}/{jnp.dtype(dtype).name}/ndev_{ndev}/"
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     file_name = f"N_{N}_jax_native"
@@ -143,29 +138,29 @@ def main_cho_solve(N):
     print(f"N={N}, dtype={dtype}")
     print(jnp.dtype(dtype).itemsize)
     print(f"Memory allocated: {N*N*jnp.dtype(dtype).itemsize/1e9} GB")
+
     # MESH
     make_diag = jax.jit(lambda: jnp.diag(jnp.arange(N, dtype=dtype) + 1))
 
     @partial(jax.jit, donate_argnums=0)
-    def chosolve(A, b):
-        cfac = jax.scipy.linalg.cho_factor(A, overwrite_a=True, check_finite=False)
-        return jax.scipy.linalg.cho_solve(cfac, b)
+    def eigh(A):
+        return jnp.linalg.eigh(A)
 
     @jax.jit
     def run_once():
         A = make_diag()
-        b = jnp.ones((N, NRHS), dtype=dtype)
-        return A,b
+        return A
 
     times = []
     for run in range(n_runs + 1):
         print("Data allocated")
 
         start = time.time()
-        A, b = run_once()
+        A = run_once()
         A.block_until_ready()
-        out = chosolve(A, b)
-        out.block_until_ready()
+        ev, V = eigh(A)
+        ev.block_until_ready()
+        V.block_until_ready()
         end = time.time()
         if run > 0:  # skip jitted run
             times.append(end - start)
@@ -177,10 +172,10 @@ def main_cho_solve(N):
 
 if __name__ == "__main__":
 
-    for N in [2**i for i in range(4, 18)] + [58000] + [140000] + [200000] + [280000]:
+    for N in [2**i for i in range(4, 18)] + [58000] + [140000]:
         if ndev == 1:
-            main_cho_solve(N)
+            main_eigh(N)
         else:
-            for T_A in [2**i for i in range(8,13)]:
+            for T_A in [2**i for i in range(8,11)]:
                 print(f"N={N}, T_A={T_A}")
-                main_potrs(N, T_A=T_A)
+                main_syevd(N, T_A=T_A)
