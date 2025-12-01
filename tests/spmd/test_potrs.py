@@ -1,7 +1,6 @@
 import sys
 import os
 import pytest
-import io
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(this_dir, "..")

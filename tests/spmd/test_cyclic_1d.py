@@ -3,7 +3,7 @@ import os
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 src_path = os.path.join(this_dir, "..")
-print(src_path)
+
 sys.path.append(src_path)
 import jax
 
