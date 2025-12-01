@@ -52,15 +52,9 @@ def determine_distributed_setup():
     )  # list of len = num_processes, ordered by process_index
     all_ids = jnp.atleast_2d(all_ids)
     unique_ids = set(str(row[0])+str(row[1]) for row in all_ids)
-    # print(unique_ids)
     num_machines = len(unique_ids)
-    # print(all_ids)
-    try:
-        cuda_visible_devices = os.environ["CUDA_VISIBLE_DEVICES"]
-        n_visisble_devices = len(cuda_visible_devices.split(","))
-    except KeyError:
-        warnings.warn(JaxMgWarning("GPU(s) detected by jax but CUDA_VISIBLE_DEVICES is not set. "))
-        n_visisble_devices = len(list(filter(lambda d: d.platform=='gpu', jax.devices())))
+    cuda_visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES","")
+    n_visisble_devices = len(cuda_visible_devices.split(","))
     n_devices = jax.device_count()
     n_devices_per_machine = n_devices // num_machines
     n_devices_per_process = n_devices // n_proc
