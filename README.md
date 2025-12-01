@@ -1,13 +1,12 @@
-<p align="center">
-    <img src="docs/_static/logo.png" alt="Jaxmg" width="300">
-</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/therooler/jaxmg/main/docs/_static/logo.png" alt="Jaxmg" width="300">
+</div>
 
 # JAXMg: A distributed linear solver in JAX with cuSolverMg
 
 [![Docs](https://img.shields.io/badge/docs-site-blue?style=flat-square)](https://therooler.github.io/jaxmg/)
 [![Releases](https://img.shields.io/github/v/release/therooler/jaxmg?style=flat-square)](https://github.com/therooler/jaxmg/releases)
-
-<!-- [![Continuous integration](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml/badge.svg)](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml) -->
+[![Continuous integration](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml/badge.svg)](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml)
 
 # JAXMg
 JAXMg provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api), NVIDIA’s multi-GPU linear solver.  We provide a jittable API for the following routines.
@@ -29,13 +28,12 @@ The provided binary is compiled with:
 !!! Compatibility
     We require JAX>=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
 
-
 ## Installation
 
 Clone the repository and install with:
 
 ```bash
-pip install ".[cuda]"
+pip install jaxmg
 ```
 
 This will install a GPU compatible version of JAX. 

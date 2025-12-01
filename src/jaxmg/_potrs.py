@@ -17,7 +17,7 @@ def potrs(
     b: Array,
     T_A: int,
     mesh: Mesh,
-    in_specs: Tuple[P] | List[P],
+    in_specs: Tuple[P,P] | List[P],
     return_status: bool = False,
     pad=True,
 ) -> Union[Array, Tuple[Array, int]]:

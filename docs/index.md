@@ -1,4 +1,10 @@
 # JAXMg
+
+<figure markdown>
+  ![Title](_static/jaxmg_gpu_light.png#only-light){ width="600" }
+  ![Title](_static/jaxmg_gpu_dark.png#only-dark){ width="600" } 
+</figure>
+
 JAXMg provides a C++ interface between [JAX](https://github.com/google/jax) and [cuSolverMg](https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api), NVIDIA’s multi-GPU linear solver.  We provide a jittable API for the following routines.
 
 - [cusolverMgPotrs](https://docs.nvidia.com/cuda/cusolver/index.html#cusolvermgpotrs-deprecated): Solves the system of linear equations: $Ax=b$ where $A$ is an $N\times N$ symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition 
@@ -7,7 +13,7 @@ JAXMg provides a C++ interface between [JAX](https://github.com/google/jax) and 
 
 For more details, see the [API](api/potrs.md).
 
-The provided binary is compiled with:
+The provided binaries are compiled with:
 
 | Component | Version |
 |---|---:|
@@ -15,5 +21,5 @@ The provided binary is compiled with:
 | **CUDA** | 12.8.0 |
 | **cuDNN** | 9.2.0.82-12 |
 
-!!! Compatibility
+!!! Warning
     We require JAX>=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
