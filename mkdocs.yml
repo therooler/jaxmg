@@ -54,6 +54,8 @@ markdown_extensions:
     - pymdownx.snippets: # Include one Markdown file into another
           base_path: docs
     - admonition
+    - md_in_html
+    - attr_list
     - toc:
           permalink: "¤" # Adds a clickable permalink to each section heading
           toc_depth: 4
