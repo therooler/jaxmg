@@ -211,7 +211,7 @@ def verify_cyclic(A, A_cyclic, T_A):
 
 def plot_block_to_cyclic(
     N: int, T_A: int, ndev: int, N_rows: int = 8
-) -> Tuple[plt.Figure, np.ndarray]:
+):
     """Visualize global column ownership (by device id) before and after converting
     column-block sharding to 1D block-cyclic with tile size ``T_A`` across ``ndev`` devices.
 
