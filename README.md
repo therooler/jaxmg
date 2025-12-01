@@ -1,6 +1,6 @@
-<p align="center">
-    <img src="docs/_static/logo.png" alt="Jaxmg" width="300">
-</p>
+<div align="center">
+    <img src="https://raw.githubusercontent.com/therooler/jaxmg/main/docs/_static/logo.png" alt="Jaxmg" width="300">
+</div>
 
 # JAXMg: A distributed linear solver in JAX with cuSolverMg
 
