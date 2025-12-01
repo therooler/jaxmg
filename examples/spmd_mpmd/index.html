@@ -26,7 +26,7 @@
     
     
       
-        <title>SPMD and MPMD support - JAXMg</title>
+        <title>MPMD support - JAXMg</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#spmd-and-mpmd-support" class="md-skip">
+        <a href="#mpmd-support" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              SPMD and MPMD support
+              MPMD support
             
           </span>
         </div>
@@ -559,7 +559,7 @@
   
   
   <span class="md-ellipsis">
-    SPMD and MPMD support
+    MPMD support
     
   </span>
   
@@ -850,14 +850,14 @@
 
 
 
-<h1 id="spmd-and-mpmd-support">SPMD and MPMD support<a class="headerlink" href="#spmd-and-mpmd-support" title="Permanent link">¤</a></h1>
+<h1 id="mpmd-support">MPMD support<a class="headerlink" href="#mpmd-support" title="Permanent link">¤</a></h1>
 <p>We support two modes of distributed computing. Single Process Multiple Devices mode (SPMD), where we have
 a single process per node that potentially manages multiple devices. We also support MPMD mode (MPMD). Here the user needs to
 use one process for each GPU. When <code>jaxmg</code> is imported, we attempt to verify the user's distributed setup to not go out beyond these two modes of computation.</p>
-<p><code>jaxmg</code> supports multi-process <code>jax.distributed</code> environments but cuSolverMg <strong>can only run on a single node</strong>. There are some technical reasons for this (see below) that will hopefully be resolved in a future release.</p>
-<p>To circumvent this limitation, one can perform a computation over all global devices, replicate the results over all host by gathering the data and calling the solver only on the process-local devices. </p>
+<p><code>jaxmg</code> supports multi-process <code>jax.distributed</code> environments but cuSolverMg <strong>can only run on a single node</strong>. There are some technical reasons for this that will hopefully be resolved in a future release.</p>
+<p>To circumvent this limitation, one can perform a computation over all global devices, replicate the results over all host by gathering the data and calling the solver only on each machine.</p>
 <p>Here we provide an example of using <code>jaxmg</code> in a context where we have 2 nodes, each with 4 GPUs.
-In order to use the solver, we will have to gather the results onto each node by making use of a 2D <code>Mesh</code>. To illustrate the data layout, we will simply work with CPUs which allows us to run this code on a local machine.</p>
+In order to use the solver, we will have to gather the results onto each node by making use of a 2D <code>Mesh</code>.</p>
 <div class="highlight"><pre><span></span><code><span class="c1"># Call ./examples/multi_process.sh to launch this code!</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">os</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>

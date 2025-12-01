@@ -558,7 +558,7 @@
   
   
   <span class="md-ellipsis">
-    SPMD and MPMD support
+    MPMD support
     
   </span>
   
@@ -849,6 +849,10 @@
 
 
 <h1 id="jaxmg">JAXMg<a class="headerlink" href="#jaxmg" title="Permanent link">¤</a></h1>
+<figure>
+<p><img alt="Title" src="_static/jaxmg_gpu_light.png#only-light" width="600" />
+  <img alt="Title" src="_static/jaxmg_gpu_dark.png#only-dark" width="600" /> </p>
+</figure>
 <p>JAXMg provides a C++ interface between <a href="https://github.com/google/jax">JAX</a> and <a href="https://docs.nvidia.com/cuda/cusolver/index.html#using-the-cuSolverMg-api">cuSolverMg</a>, NVIDIA’s multi-GPU linear solver.  We provide a jittable API for the following routines.</p>
 <ul>
 <li><a href="https://docs.nvidia.com/cuda/cusolver/index.html#cusolvermgpotrs-deprecated">cusolverMgPotrs</a>: Solves the system of linear equations: <span class="arithmatex">\(Ax=b\)</span> where <span class="arithmatex">\(A\)</span> is an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) positive-definite matrix via a Cholesky decomposition </li>
@@ -856,7 +860,7 @@
 <li><a href="https://docs.nvidia.com/cuda/cusolver/index.html#cusolvermgsyevd-deprecated">cusolverMgPotrs</a>: Computes eigenvalues and eigenvectors of an <span class="arithmatex">\(N\times N\)</span> symmetric (Hermitian) matrix.</li>
 </ul>
 <p>For more details, see the <a href="api/potrs/">API</a>.</p>
-<p>The provided binary is compiled with:</p>
+<p>The provided binaries are compiled with:</p>
 <table>
 <thead>
 <tr>
@@ -879,8 +883,8 @@
 </tr>
 </tbody>
 </table>
-<div class="admonition compatibility">
-<p class="admonition-title">Compatibility</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
 <p>We require JAX&gt;=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.</p>
 </div>
 
