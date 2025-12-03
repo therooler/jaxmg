@@ -25,8 +25,7 @@ The provided binary is compiled with:
 | **CUDA** | 12.8.0 |
 | **cuDNN** | 9.2.0.82-12 |
 
-!!! Compatibility
-    We require JAX>=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
+> **_NOTE:_** We require JAX>=0.6.0, since it ships with CUDA 12.x binaries, which this package relies on. No local version of CUDA is required.
 
 ## Installation
 
