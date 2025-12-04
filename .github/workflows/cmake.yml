@@ -38,17 +38,17 @@ jobs:
           echo "Requested GCC version: $GCC_VERSION"
           echo "Note: GitHub hosted runners provide gcc-11; exact patch version 11.5.0 may not be available via apt."
 
-      - name: Setup CUDA and cuDNN
-        # Uses NVIDIA action to install CUDA and cuDNN. Exact cuDNN patch release
-        # (e.g. 9.2.0.82-12) may require manual install or self-hosted runners.
-        uses: NVIDIA/setup-cuda@v2
+      - name: Install CUDA Toolkit on runner
+        uses: Jimver/cuda-toolkit@v0.2.29
+        id: cuda-toolkit
         with:
-          cuda-version: "${{ env.CUDA_VERSION }}"
-          cudnn: "9.2"
+          cuda: "${{ env.CUDA_VERSION }}"
+          method: "network"
+          log-file-suffix: "ubuntu-22.04.txt"
 
       - name: Export CUDA env vars for CMake
         run: |
-          echo "CUDA_ROOT=/usr/local/cuda" >> $GITHUB_ENV
+          echo "CUDA_ROOT=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}" >> $GITHUB_ENV
           echo "CUDNN_ROOT=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
           echo "Requested CUDA: $CUDA_VERSION" 
           echo "Requested cuDNN: $CUDNN_VERSION"
