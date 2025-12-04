@@ -32,12 +32,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git wget curl unzip pkg-config libnuma-dev
-          sudo apt-get install -y gcc-11 g++-11
-          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
-          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
-          echo "Requested GCC version: $GCC_VERSION"
-          echo "Note: GitHub hosted runners provide gcc-11; exact patch version 11.5.0 may not be available via apt."
-
       - name: Install CUDA Toolkit on runner
         uses: Jimver/cuda-toolkit@v0.2.29
         id: cuda-toolkit
@@ -52,7 +46,6 @@ jobs:
           echo "CUDNN_ROOT=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
           echo "Requested CUDA: $CUDA_VERSION" 
           echo "Requested cuDNN: $CUDNN_VERSION"
-          echo "If the exact cuDNN patch release is required, consider a self-hosted runner with that package preinstalled."
 
       - name: Install Python build dependencies
         run: |
