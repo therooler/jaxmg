@@ -1,0 +1,80 @@
+name: CMake build
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+
+jobs:
+  build:
+    name: Build (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    env:
+      CC: gcc-11
+      CXX: g++-11
+      GCC_VERSION: "11.5.0"
+      CUDA_VERSION: "12.8.0"
+      CUDNN_VERSION: "9.2.0.82-12"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git wget curl unzip pkg-config libnuma-dev
+          sudo apt-get install -y gcc-11 g++-11
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 100
+          sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-11 100
+          echo "Requested GCC version: $GCC_VERSION"
+          echo "Note: GitHub hosted runners provide gcc-11; exact patch version 11.5.0 may not be available via apt."
+
+      - name: Setup CUDA and cuDNN
+        # Uses NVIDIA action to install CUDA and cuDNN. Exact cuDNN patch release
+        # (e.g. 9.2.0.82-12) may require manual install or self-hosted runners.
+        uses: NVIDIA/setup-cuda@v2
+        with:
+          cuda-version: "${{ env.CUDA_VERSION }}"
+          cudnn: "9.2"
+
+      - name: Export CUDA env vars for CMake
+        run: |
+          echo "CUDA_ROOT=/usr/local/cuda" >> $GITHUB_ENV
+          echo "CUDNN_ROOT=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
+          echo "Requested CUDA: $CUDA_VERSION" 
+          echo "Requested cuDNN: $CUDNN_VERSION"
+          echo "If the exact cuDNN patch release is required, consider a self-hosted runner with that package preinstalled."
+
+      - name: Install Python build dependencies
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Configure CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+        env:
+          CUDA_ROOT: ${{ env.CUDA_ROOT }}
+          CUDNN_ROOT: ${{ env.CUDNN_ROOT }}
+
+      - name: Build and install
+        run: |
+          cd build
+          cmake --build . --target install -- -j$(nproc)
+
+      - name: Upload build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cmake-build-log-${{ matrix.python-version }}
+          path: build/
