@@ -12,6 +12,8 @@ import jax
 HERE = Path(__file__).parent
 MP_TEST = HERE / "run_test_potrs.py"
 
+if len(jax.devices("gpu"))==0:
+    pytest.skip("No GPUs found. Skipping")
 
 def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -90,6 +92,7 @@ def test_launch_mpmd_collect_results(requested_procs):
         if code != 0:
             print(f"===== mp_test proc {idx} combined output =====")
             print(logs[idx])
+        print(logs[idx])
         assert code == 0, f"mp_test process {idx} failed with exit code {code}"
 
     # Parse MPTEST JSON lines and aggregate results
