@@ -40,7 +40,7 @@ jobs:
       # 2) Only build CUDA libs if cache miss
       - name: Build CUDA libs
         if: steps.cache-cuda.outputs.cache-hit != 'true'
-        uses: ./.github/actions/build-cuda-libs
+        uses: ./.github/actions/build-cuda-libs.yml
         # or inline your build script here if you prefer
 
       # (optional) Debug: did we rebuild?
