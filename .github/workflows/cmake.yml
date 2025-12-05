@@ -114,7 +114,11 @@ jobs:
               --exclude libcublasLt.so.12 \
               --exclude libcupti.so.12 \
               --exclude libcuda.so.1 \
-              --exclude libcudnn.so.9
+              --exclude libcudnn.so.9 \
+              --exclude libcusolver.so.11 \
+              --exclude libcusolverMg.so.11 \
+              --exclude libnvJitLink.so.12 \
+              --exclude libcusparse.so.12
           # Run tests after building (optional, requires GPU in CI)
           # CIBW_TEST_COMMAND: "pytest {project}/tests"
           # For now, skip tests as they require GPU
