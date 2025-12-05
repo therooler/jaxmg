@@ -14,6 +14,9 @@ pipeline {
     }
     stages {
         stage('Build') {
+            environment {
+                PARALLEL = "${env.PARALLEL}"
+            }
             steps {
                 sh '''#!/bin/bash -ex
                     export CUDA_ROOT=/usr/local/cuda
@@ -24,7 +27,7 @@ pipeline {
                     ln -sfn third_party/gpus/cuda
                     mkdir -p build && cd build
                     cmake -DCMAKE_BUILD_TYPE=Release ..
-                    cmake --build . --target install -- -j4
+                    cmake --build . --target install -- -j${PARALLEL}
                 '''
                 sh '''#!/bin/bash -ex
                     python3 -m venv $HOME/.venv
