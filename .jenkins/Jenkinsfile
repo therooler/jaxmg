@@ -41,7 +41,7 @@ pipeline {
         }
         stage('Test') {
             environment {
-                CUDA_VISIBLE_DEVICES = 2
+                CUDA_VISIBLE_DEVICES = '0,1'
             }
             steps {
                 sh '''#!/bin/bash -ex
