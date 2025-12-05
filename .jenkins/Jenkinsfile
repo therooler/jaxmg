@@ -7,7 +7,7 @@ pipeline {
         }
     }
     options {
-        timeout(time: 1, unit: 'HOURS')
+        timeout(time: 30, unit: 'MINUTES')
     }
     environment {
         HOME = "$WORKSPACE"
@@ -44,6 +44,7 @@ pipeline {
                 sh '''#!/bin/bash -ex
                     source $HOME/.venv/bin/activate
                     python3 -m pip install 'pytest==8.2.1'
+                    python3 -c 'import jax; print(jax.devices())'
                     python3 -m pytest
                 '''
             }
