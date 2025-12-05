@@ -6,7 +6,8 @@ RUN apt-get update && \
     python3-build \
     python3-pip \
     python3-venv \
-    cmake && \
+    cmake \
+    git && \
     apt-get autoremove --purge -y && \
     apt-get autoclean -y && \
     rm -rf /var/cache/apt/* /var/lib/apt/lists/*
