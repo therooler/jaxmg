@@ -16,6 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: quay.io/pypa/manylinux_2_28_x86_64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python_version: "3.11"
+            python_abi: "cp311-cp311"
+          - python_version: "3.12"
+            python_abi: "cp312-cp312"
+          - python_version: "3.13"
+            python_abi: "cp313-cp313"
+          - python_version: "3.14"
+            python_abi: "cp314-cp314"  # may not exist yet in this image
 
     steps:
       - name: Checkout repository
@@ -54,28 +66,29 @@ jobs:
           ls -la src/jaxmg/bin || echo "No bin directory?"
 
       # 3) Set up Python & build wheel
-      - name: Build wheel with Python
+      - name: Build wheel with Python ${{ matrix.python_version }}
         run: |
           set -ex
-          # pick one of the manylinux Pythons, e.g. CPython 3.11
-          PY=/opt/python/cp311-cp311/bin/python
+          PY="/opt/python/${{ matrix.python_abi }}/bin/python"
 
+          echo "Using Python at: $PY"
           "$PY" -m pip install --upgrade pip build
-          "$PY" -m build --wheel
+          "$PY" -m build --wheel --outdir "dist-${{ matrix.python_abi }}"
+
 
       # 4) Inspect wheel
       - name: Show wheel contents
         run: |
-          ls -lh dist/
-          for wheel in dist/*.whl; do
+          ls -lh "dist-${{ matrix.python_abi }}/"
+          for wheel in dist-${{ matrix.python_abi }}/*.whl; do
             echo "=== $wheel ==="
             unzip -l "$wheel" | grep "\.so$" || echo "No .so files found"
           done
 
-      # 5) Upload wheel
+      # 5) Upload wheel(s) for this Python version
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
-          name: jaxmg-wheel-${{ github.sha }}
-          path: dist/*.whl
+          name: jaxmg-wheel-${{ matrix.python_abi }}-${{ github.sha }}
+          path: dist-${{ matrix.python_abi }}/*.whl
           retention-days: 30
