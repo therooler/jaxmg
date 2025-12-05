@@ -2,7 +2,7 @@ name: Build CUDA Wheels
 
 on:
   push:
-    tags: ['v*']
+    branches: [ dev ]
   pull_request:
     paths:
       - '.github/workflows/build-wheels.yml'
