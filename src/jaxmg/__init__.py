@@ -33,9 +33,19 @@ def _load(module, libraries):
                 ) from e
 
 
-# _load("cuda", ["libcuda.so.1"])
-_load("cusolver", ["libcusolver.so.11"])
-_load("cusolver", ["libcusolverMg.so.11"])
+# When we do ldd *.so on the binaries we see:
+# libcusolver.so.11 => not found
+# libcusolverMg.so.11 => not found
+# libcupti.so.12 => not found
+# libcublas.so.12 => not found
+# libcusparse.so.12 => not found
+# libnvJitLink.so.12 => not found
+# libcublasLt.so.12 => not found
+# We now load these from the binaries shipped with jax.
+_load("cuda_cupti", ["libcupti.so.12"])
+_load("cublas", ["libcublas.so.12", "libcublasLt.so.12"])
+_load("cusparse", ["libcusparse.so.12"])
+_load("cusolver", ["libcusolver.so.11", "libcusolverMg.so.11"])
 
 import jax
 import jax.numpy as jnp
@@ -135,7 +145,7 @@ from ._cyclic_1d import (
     unpad_rows,
     verify_cyclic,
     get_cols_cyclic,
-    plot_block_to_cyclic
+    plot_block_to_cyclic,
 )
 
 __all__ = [
