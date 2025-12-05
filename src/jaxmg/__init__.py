@@ -118,7 +118,7 @@ if any("gpu" == d.platform for d in jax.devices()):
 
 else:
     warnings.warn(
-        f"No GPUs found, only use this mode for testing or docs.",
+        f"No GPUs found, only use this mode for testing or generating documentation.",
         JaxMgWarning,
         stacklevel=2,
     )
@@ -143,9 +143,9 @@ __all__ = [
     "potrs_shardmap_ctx",
     "potri",
     "potri_shardmap_ctx",
+    "potri_symmetrize",
     "syevd",
     "syevd_shardmap_ctx",
-    "potri_symmetrize",
     "cyclic_1d",
     "pad_rows",
     "unpad_rows",

@@ -179,3 +179,8 @@ h5.doc-heading, h6.heading {
         padding-top: 64px;
     }
 }
+
+[data-md-color-scheme="light"] img[src$="#only-light"],
+[data-md-color-scheme="dark"] img[src$="#only-dark"] {
+  display: none; /* Hide dark images in light mode */
+}

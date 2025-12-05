@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
-
+import jax
 
 HERE = Path(__file__).parent
 MP_TEST = HERE / "run_test_potrs.py"
@@ -17,16 +17,6 @@ def _find_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
-
-
-def _gpu_count_from_env() -> int:
-    """Best-effort GPU count from CUDA_VISIBLE_DEVICES; returns -1 if unset."""
-    cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
-    if not cvd:
-        return -1
-    # Accept formats like "0,1" or "0" or "" (empty -> 0)
-    parts = [p for p in cvd.split(",") if p.strip() != ""]
-    return len(parts)
 
 
 @pytest.mark.multi_gpu
@@ -39,13 +29,8 @@ def test_launch_mpmd_collect_results(requested_procs):
     (no GPUs visible and no CUDA_VISIBLE_DEVICES preset).
     """
 
-    gpu_count = _gpu_count_from_env()
-    if gpu_count == -1:
-        # Fall back: detect via /dev/nvidia*
-        has_gpu_nodes = any(Path("/dev").glob("nvidia[0-9]*"))
-        if not has_gpu_nodes:
-            pytest.skip("No GPUs detected and CUDA_VISIBLE_DEVICES not set; skipping MPMD GPU test")
-    elif gpu_count != requested_procs:
+    gpu_count = jax.device_count("gpu")
+    if gpu_count != requested_procs:
         pytest.skip(
             f"Need {requested_procs} GPUs in CUDA_VISIBLE_DEVICES to run this test (have {gpu_count})"
         )
@@ -65,8 +50,8 @@ def test_launch_mpmd_collect_results(requested_procs):
             [
                 "[launcher] starting mp run",
                 f"[launcher] requested_procs={requested_procs}",
+                f"[launcher] available gpus={gpu_count}",
                 f"[launcher] coord={coord}",
-                f"[launcher] CUDA_VISIBLE_DEVICES={os.environ.get('CUDA_VISIBLE_DEVICES','')}",
                 f"[launcher] XLA_PYTHON_CLIENT_PREALLOCATE={env.get('XLA_PYTHON_CLIENT_PREALLOCATE','')}",
             ]
         )

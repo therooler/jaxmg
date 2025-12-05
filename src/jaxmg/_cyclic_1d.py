@@ -8,11 +8,6 @@ from typing import Tuple, List, Union
 
 from functools import partial
 
-import matplotlib.pyplot as plt
-from matplotlib.colors import ListedColormap, BoundaryNorm
-from matplotlib.patches import Patch
-
-
 def cyclic_1d(a: Array, T_A: int, mesh: Mesh, in_specs: Tuple[P] | List[P], pad=True)-> Union[Array, Tuple[Array, int]]:
     """
     Prepare and run the 1D block-cyclic remapping FFI kernel for row-sharded arrays.
@@ -196,9 +191,6 @@ def get_cols_cyclic(N, N_batch, T_A, num_devices):
         global_col_src = col + offset * num_offsets
         global_col_dst = dst_cols[dst_dev] + dst_dev * N_batch
         col_list.append((col, global_col_src, global_col_dst))
-        # print(
-        #     f"src={global_col_src}, dst={global_col_dst}"
-        # )
         dst_cols[dst_dev] += 1
     return col_list
 
@@ -219,7 +211,7 @@ def verify_cyclic(A, A_cyclic, T_A):
 
 def plot_block_to_cyclic(
     N: int, T_A: int, ndev: int, N_rows: int = 8
-) -> Tuple[plt.Figure, np.ndarray]:
+):
     """Visualize global column ownership (by device id) before and after converting
     column-block sharding to 1D block-cyclic with tile size ``T_A`` across ``ndev`` devices.
 
@@ -244,6 +236,11 @@ def plot_block_to_cyclic(
         axs: np.ndarray
             Array of Axes objects where ``axs[0]`` is the "before" plot and ``axs[1]`` the "after" plot.
     """
+
+    import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap, BoundaryNorm
+    from matplotlib.patches import Patch
+
     shard_size = N // ndev
     if shard_size < 1 or T_A < 1 or ndev < 1:
         raise ValueError("shard_size, T_A, and ndev must be positive integers.")
