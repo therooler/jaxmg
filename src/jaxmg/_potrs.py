@@ -134,7 +134,7 @@ def potrs(
         check_vma=False,
     )
     def impl(_a, _b):
-        _a, _status = ffi_fn(_a, _b)
+        _a, _status = ffi_fn(_a, _b) 
         return _a, _status
 
     if not pad or padding == 0 or T_A >= N // ndev:
@@ -161,7 +161,7 @@ def potrs(
         _out, _status = impl(_a, _b)
         return _out, _status
 
-    out, status = fn(a, b)
+    out, status = fn(a.conj(), b)
     if return_status:
         return out, status[0]
     else:
@@ -269,4 +269,4 @@ def potrs_shardmap_ctx(a: Array, b: Array, T_A: int, pad=True) -> Tuple[Array, A
         _out, _status = impl(_a, _b)
         return _out, _status
 
-    return fn(a, b)
+    return fn(a.conj(), b)

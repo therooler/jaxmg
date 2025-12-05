@@ -4,7 +4,7 @@
 
 # JAXMg: A distributed linear solver in JAX with cuSolverMg
 
-[![Docs](https://img.shields.io/badge/docs-site-blue?style=flat-square)](https://therooler.github.io/jaxmg/)
+[![Docs](https://img.shields.io/badge/docs-site-blue?style=flat-square)](https://flatironinstitute.github.io/jaxmg/)
 [![Releases](https://img.shields.io/github/v/release/therooler/jaxmg?style=flat-square)](https://github.com/therooler/jaxmg/releases)
 [![Continuous integration](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml/badge.svg)](https://github.com/therooler/jaxmg/actions/workflows/ci-build.yaml)
 

@@ -275,7 +275,6 @@ namespace jax
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-            printf("Hit shard\n");
             if (currentDevice == 0)
             {
                 memcpyCyclicShard<data_type>(nbGpus, stream, deviceList.data(),
@@ -286,7 +285,6 @@ namespace jax
 
             CUDA_CHECK_OR_RETURN(cudaDeviceSynchronize());
             sync_point.arrive_and_wait();
-             printf("Done with shard\n");
 
             if (currentDevice == 0)
             {
