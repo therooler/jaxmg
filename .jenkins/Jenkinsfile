@@ -18,6 +18,7 @@ pipeline {
                 PARALLEL = "${env.PARALLEL}"
             }
             steps {
+                cleanWs()
                 sh '''#!/bin/bash -ex
                     export CUDA_ROOT=/usr/local/cuda
                     export CUDNN_ROOT=/usr
