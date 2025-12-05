@@ -16,7 +16,7 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
-                    mkdir build # TODO cmake, test jenkins with precompiled artifacts to start
+                    #mkdir build # TODO cmake, test jenkins with precompiled artifacts to start
                 '''
                 sh '''#!/bin/bash -ex
                     python3 -m venv $HOME/.venv
