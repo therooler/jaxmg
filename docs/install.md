@@ -2,7 +2,7 @@
 Clone the repository and install with:
 
 ```bash
-pip install ".[cuda]"
+pip install jaxmg
 ```
 
 This will install a GPU compatible version of JAX. 

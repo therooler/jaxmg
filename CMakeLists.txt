@@ -34,7 +34,9 @@ CPMAddPackage(
 
 # Import CUDAToolkit (Requires CUDA_HOME to be set)
 find_package(CUDAToolkit REQUIRED)
-find_library(CUSOLVERMG_LIB cusolverMg HINTS "${CUDA_TOOLKIT_ROOT_DIR}/lib64" REQUIRED)
+find_library(CUSOLVERMG_LIB cusolverMg
+    HINTS "${CUDAToolkit_LIBRARY_DIR}" "${CUDA_TOOLKIT_ROOT_DIR}/lib64" "/usr/local/cuda/lib64"
+    REQUIRED)
 # Import CUDAToolkit (Requires CUDA_HOME to be set)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH})
 find_package(CUDNN REQUIRED)
