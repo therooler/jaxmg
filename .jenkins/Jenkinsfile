@@ -20,9 +20,11 @@ pipeline {
                     export CUDNN_ROOT=/usr
                     export PATH=/usr/local/cuda/bin:$PATH
                     export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+                    mkdir -p third_party/gpus
+                    ln -sfn third_party/gpus/cuda
                     mkdir -p build && cd build
                     cmake -DCMAKE_BUILD_TYPE=Release ..
-                    cmake --build . --target install
+                    cmake --build . --target install -- -j4
                 '''
                 sh '''#!/bin/bash -ex
                     python3 -m venv $HOME/.venv
