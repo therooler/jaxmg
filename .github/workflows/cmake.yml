@@ -1,78 +1,136 @@
-name: CMake build
+name: Build CUDA Wheels
 
 on:
   push:
-    branches: [ main, dev ]
+    tags: ['v*']
   pull_request:
-    branches: [ main, dev ]
+    paths:
+      - '.github/workflows/build-wheels.yml'
+      - 'pyproject.toml'
+      - 'CMakeLists.txt'
+      - 'src/cuda/**'
+  workflow_dispatch:
 
 jobs:
-  build:
-    name: Build (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-22.04
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13", "3.14"]
-    env:
-      CC: gcc-11
-      CXX: g++-11
-      GCC_VERSION: "11.5.0"
-      CUDA_VERSION: "12.8.0"
+  build_wheels:
+    name: Build wheels on Linux
+    runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          fetch-depth: 0
 
-      - name: Install system packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential cmake git wget curl unzip pkg-config libnuma-dev
-      - name: Install CUDA Toolkit on runner
-        uses: Jimver/cuda-toolkit@v0.2.29
-        id: cuda-toolkit
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          cuda: "${{ env.CUDA_VERSION }}"
-          method: "network"
-          log-file-suffix: "ubuntu-22.04.txt"
+          python-version: '3.11'
 
-      - name: Export CUDA env vars for CMake
-        run: |
-          echo "CUDA_ROOT=${{ steps.cuda-toolkit.outputs.CUDA_PATH }}" >> $GITHUB_ENV
-          echo "CUDNN_ROOT=/usr/lib/x86_64-linux-gnu" >> $GITHUB_ENV
-          echo "Requested CUDA: $CUDA_VERSION" 
-          # CUPTI headers are in /usr/local/cuda/include/ on CI
-          # Jaxlib looks for headers in extras/CUPTI/include
-          # Create symlink from extras/CUPTI/include to main include directory
-          sudo mkdir -p /usr/local/cuda/extras/CUPTI
-          sudo ln -sfn ${{ steps.cuda-toolkit.outputs.CUDA_PATH }}/include /usr/local/cuda/extras/CUPTI/include || true
-          echo "Created CUPTI symlink:"
-          ls -la /usr/local/cuda/extras/CUPTI/include/cupti*.h || true
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==3.3.0
 
-      - name: Install Python build dependencies
-        run: |
-          python -m pip install --upgrade pip setuptools wheel
-
-      - name: Configure CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
+      - name: Build wheels
+        run: python -m cibuildwheel --output-dir wheelhouse
         env:
-          CUDA_ROOT: ${{ env.CUDA_ROOT }}
-          CUDNN_ROOT: ${{ env.CUDNN_ROOT }}
+          # Only build for CPython 3.11, 3.12, 3.13, 3.14 on Linux x86_64
+          CIBW_BUILD: "cp311-manylinux_x86_64 cp312-manylinux_x86_64 cp313-manylinux_x86_64 cp314-manylinux_x86_64"
 
-      - name: Build and install
-        run: |
-          cd build
-          cmake --build . --target install -- -j$(nproc)
+          # Skip PyPy, musllinux, Windows, and macOS
+          CIBW_SKIP: "pp* *-musllinux_*"
 
-      - name: Upload build log
-        if: failure()
+          # Use manylinux_2_28 for GCC 11 support
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+
+          # Install CUDA Toolkit and dependencies before building all wheels
+          CIBW_BEFORE_ALL_LINUX: |
+            set -ex
+            # Install basic dependencies (--nogpgcheck to skip GPG verification in manylinux container)
+            yum install -y --nogpgcheck wget git cmake3 gcc-toolset-11 gcc-toolset-11-gcc-c++ yum-utils
+            # Enable GCC 11
+            source /opt/rh/gcc-toolset-11/enable
+            # Install CUDA Toolkit 12.6 (using network repository)
+            # Use CUDA 12.6 as it's widely available and compatible with JAX >= 0.6.0
+            yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
+            yum clean all
+            # Install core CUDA toolkit (includes all libraries)
+            yum -y --nogpgcheck install cuda-toolkit-12-6
+            # Install cuDNN from CUDA repository (try libcudnn9-cuda-12)
+            yum -y --nogpgcheck install libcudnn9-cuda-12 libcudnn9-devel-cuda-12 || echo "cuDNN not available in repo, skipping"
+            # Create symlink for easier path reference
+            ln -sf /usr/local/cuda-12.6 /usr/local/cuda
+            # Verify installations
+            ls -la /usr/local/cuda/
+            nvcc --version || echo "NVCC not found"
+            # List available CUDA libraries
+            echo "=== CUDA lib64 contents ==="
+            ls -la /usr/local/cuda/lib64/ | grep -i cusolver || echo "No cusolver libs found"
+            find /usr/local/cuda -name "*cusolverMg*" || echo "cusolverMg not found"
+            # Check CUPTI location
+            echo "=== Looking for CUPTI ==="
+            ls -la /usr/local/cuda/extras/CUPTI/ 2>/dev/null || echo "No CUPTI extras"
+            ls -la /usr/local/cuda/extras/CUPTI/include/ 2>/dev/null || echo "No CUPTI include in extras"
+            # CUPTI headers are in /usr/local/cuda/include/, not extras/CUPTI/include/
+            # Create symlink from extras/CUPTI/include to main include directory
+            mkdir -p /usr/local/cuda/extras/CUPTI
+            ln -sfn /usr/local/cuda/include /usr/local/cuda/extras/CUPTI/include
+            echo "Created CUPTI symlink:"
+            ls -la /usr/local/cuda/extras/CUPTI/include/cupti*.h
+          # Set environment variables for the build
+          CIBW_ENVIRONMENT: |
+            CUDA_ROOT=/usr/local/cuda
+            CUDNN_ROOT=/usr
+            PATH=/usr/local/cuda/bin:$PATH
+            LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+          # Build the CUDA libraries before building the wheel
+          CIBW_BEFORE_BUILD: |
+            set -ex
+            # Enable GCC 11
+            source /opt/rh/gcc-toolset-11/enable
+            # Set environment variables
+            export CUDA_ROOT=/usr/local/cuda
+            export CUDNN_ROOT=/usr
+            export PATH=/usr/local/cuda/bin:$PATH
+            export LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+            # Create required symlinks for JAX build (JAX expects CUDA at third_party/gpus/cuda)
+            mkdir -p third_party/gpus
+            ln -sfn /usr/local/cuda third_party/gpus/cuda
+            ls -la third_party/gpus/
+            # Build using CMake
+            mkdir -p build
+            cd build
+            cmake3 -DCMAKE_BUILD_TYPE=Release ..
+            cmake3 --build . --target install -- -j$(nproc)
+            cd ..
+            # Verify the shared libraries were built
+            ls -la src/jaxmg/bin/
+          # Custom auditwheel repair to exclude CUDA libraries
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
+            auditwheel repair -w {dest_dir} {wheel} \
+              --exclude libcusolver.so.12 \
+              --exclude libcusolverMg.so.12 \
+              --exclude libcudart.so.12 \
+              --exclude libcublas.so.12 \
+              --exclude libcublasLt.so.12 \
+              --exclude libcupti.so.12 \
+              --exclude libcuda.so.1 \
+              --exclude libcudnn.so.9
+          # Run tests after building (optional, requires GPU in CI)
+          # CIBW_TEST_COMMAND: "pytest {project}/tests"
+          # For now, skip tests as they require GPU
+          CIBW_TEST_SKIP: "*"
+
+      - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cmake-build-log-${{ matrix.python-version }}
-          path: build/
+          name: jaxmg-wheels-${{ github.sha }}
+          path: ./wheelhouse/*.whl
+          retention-days: 30
+
+      - name: Display wheel info
+        run: |
+          ls -lh wheelhouse/
+          for wheel in wheelhouse/*.whl; do
+            echo "=== $wheel ==="
+            unzip -l "$wheel" | grep "\.so$" || echo "No .so files found"
+          done
