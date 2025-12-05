@@ -2,7 +2,7 @@ pipeline {
     agent {
         dockerfile {
             filename '.jenkins/Dockerfile'
-            args '--gpus 1'
+            args '--gpus 2'
             label 'docker && v100'
         }
     }
