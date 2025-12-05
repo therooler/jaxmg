@@ -1,4 +1,4 @@
-name: Build jaxmg wheel (CUDA)
+name: Build jaxmg wheel (CUDA) with cached libs
 
 on:
   push:
@@ -13,10 +13,8 @@ on:
 
 jobs:
   build-wheel:
-    name: Build wheel with precompiled CUDA libs
     runs-on: ubuntu-latest
     container:
-      # Use a manylinux-like image if you want (or your own CUDA image)
       image: quay.io/pypa/manylinux_2_28_x86_64
 
     steps:
@@ -25,24 +23,49 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1) Build the CUDA libs using your composite action
-      - name: Build CUDA libs
-        uses: ./.github/workflows/actions/compile_cuda.yml
+      # 1) Restore / create cache for CUDA libs
+      - name: Cache CUDA libs
+        id: cache-cuda
+        uses: actions/cache@v4
+        with:
+          path: src/jaxmg/bin
+          key: >
+            ${{ runner.os }}-cuda-
+            ${{ hashFiles(
+              'CMakeLists.txt',
+              'src/cuda/**',
+              'cmake/**'
+            ) }}
 
-      # 2) Set up Python
+      # 2) Only build CUDA libs if cache miss
+      - name: Build CUDA libs
+        if: steps.cache-cuda.outputs.cache-hit != 'true'
+        uses: ./.github/actions/build-cuda-libs
+        # or inline your build script here if you prefer
+
+      # (optional) Debug: did we rebuild?
+      - name: Show whether CUDA libs were rebuilt
+        run: |
+          if [ "${{ steps.cache-cuda.outputs.cache-hit }}" = "true" ]; then
+            echo "Using cached CUDA libs"
+          else
+            echo "CUDA libs rebuilt"
+          fi
+          ls -la src/jaxmg/bin || echo "No bin directory?"
+
+      # 3) Set up Python & build wheel
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # 3) Build a plain wheel (no cibuildwheel)
       - name: Install build tool
         run: python -m pip install --upgrade pip build
 
       - name: Build wheel
         run: python -m build --wheel
 
-      # 4) Inspect result
+      # 4) Inspect wheel
       - name: Show wheel contents
         run: |
           ls -lh dist/
@@ -51,7 +74,7 @@ jobs:
             unzip -l "$wheel" | grep "\.so$" || echo "No .so files found"
           done
 
-      # 5) Upload wheel as artifact
+      # 5) Upload wheel
       - name: Upload wheel
         uses: actions/upload-artifact@v4
         with:
