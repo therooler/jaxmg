@@ -1,7 +1,3 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "jaxmg"
 version = "0.0.2"
@@ -22,18 +18,27 @@ Homepage = "https://github.com/therooler/jaxmg"
 Issues = "https://github.com/therooler/jaxmg/issues"
 Docs = "https://therooler.github.io/jaxmg/"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+# [tool.setuptools.packages.find]
+# where = ["src"]
 
-[tool.setuptools.package-data]
-jaxmg = [
-    "bin/libcyclic.so",
-    "bin/libpotrs.so",
-    "bin/libpotrs_mp.so",
-    "bin/libpotri.so",
-    "bin/libsyevd.so",
-    "bin/libsyevd_no_V.so",
-]
+# [tool.setuptools.package-data]
+# jaxmg = [
+#     "bin/libcyclic.so",
+#     "bin/libpotrs.so",
+#     "bin/libpotrs_mp.so",
+#     "bin/libpotri.so",
+#     "bin/libsyevd.so",
+#     "bin/libsyevd_no_V.so",
+# ]
+[tool.cibuildwheel]
+# Only build for Linux x86_64 (no macOS, Windows, or other architectures)
+build = ["cp311-manylinux_x86_64", "cp312-manylinux_x86_64", "cp313-manylinux_x86_64", "cp314-manylinux_x86_64"]
+
+# Use manylinux_2_28 for GCC 11 support
+manylinux-x86_64-image = "manylinux_2_28"
+
+# Skip tests during wheel build (requires GPU)
+test-skip = "*"
 
 [project.optional-dependencies]
 

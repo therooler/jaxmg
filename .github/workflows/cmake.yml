@@ -54,7 +54,7 @@ jobs:
             yum-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel8/x86_64/cuda-rhel8.repo
             yum clean all
             # Install core CUDA toolkit (includes all libraries)
-            yum -y --nogpgcheck install cuda-toolkit-12-6
+            yum -y --nogpgcheck install cuda-toolkit-12-8
             # Install cuDNN from CUDA repository (try libcudnn9-cuda-12)
             yum -y --nogpgcheck install libcudnn9-cuda-12 libcudnn9-devel-cuda-12 || echo "cuDNN not available in repo, skipping"
             # Create symlink for easier path reference
