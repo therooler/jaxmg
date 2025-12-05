@@ -17,6 +17,9 @@ from functools import partial
 from jaxmg import syevd, syevd_shardmap_ctx
 from jaxmg.utils import random_psd
 
+if len(jax.devices("gpu"))==0:
+    pytest.skip("No GPUs found. Skipping test...")
+    
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))

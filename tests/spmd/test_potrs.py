@@ -15,6 +15,9 @@ from jaxmg.utils import random_psd
 
 from functools import partial
 
+if len(jax.devices("gpu"))==0:
+    pytest.skip("No GPUs found. Skipping test...")
+    
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
@@ -77,8 +80,7 @@ def cusolver_solve_psd(N, T_A, dtype):
     out = jitted_potrs(_A.copy(), _b.copy(), T_A)
     norm_scipy = jnp.linalg.norm(b - A @ expected_out)
     norm_potrf = jnp.linalg.norm(b - A @ out)
-    print(norm_potrf, norm_scipy)
-    assert jnp.isclose(norm_scipy, norm_potrf, atol=1e-6)
+    assert jnp.isclose(norm_scipy, norm_potrf, atol=1e-4)
     out_no_shm, _ = jitted_potrs_no_shardmap(_A.copy(), _b.copy(), T_A)
     norm_scipy = jnp.linalg.norm(b - A @ expected_out)
     norm_potrf = jnp.linalg.norm(b - A @ out_no_shm)

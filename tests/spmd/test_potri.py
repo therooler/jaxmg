@@ -15,6 +15,9 @@ from jaxmg import potri, potri_shardmap_ctx, potri_symmetrize
 from jaxmg.utils import random_psd
 from functools import partial
 
+if len(jax.devices("gpu"))==0:
+    pytest.skip("No GPUs found. Skipping test...")
+    
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
