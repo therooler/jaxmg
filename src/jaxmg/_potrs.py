@@ -161,7 +161,7 @@ def potrs(
         _out, _status = impl(_a, _b)
         return _out, _status
 
-    out, status = fn(a, b)
+    out, status = fn(a.conj(), b)
     if return_status:
         return out, status[0]
     else:
