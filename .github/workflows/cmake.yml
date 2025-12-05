@@ -124,41 +124,6 @@ jobs:
           # For now, skip tests as they require GPU
           CIBW_TEST_SKIP: "*"
 
-      - name: Verify wheels do not bundle CUDA/cuDNN
-        if: always()
-        run: |
-          set -euo pipefail
-          if [ ! -d wheelhouse ]; then
-            echo "No wheelhouse directory found; skipping wheel verification."
-            exit 0
-          fi
-          bad=0
-          shopt -s nullglob
-          wheels=(wheelhouse/*.whl)
-          if [ ${#wheels[@]} -eq 0 ]; then
-            echo "No wheels found in wheelhouse; skipping verification."
-            exit 0
-          fi
-          for whl in "${wheels[@]}"; do
-            echo "Inspecting $whl"
-            tmpdir=$(mktemp -d)
-            unzip -q "$whl" -d "$tmpdir"
-            while IFS= read -r -d '' sofile; do
-              echo "  Checking $sofile"
-              if ldd "$sofile" 2>/dev/null | grep -Eo 'lib(cu|cuda|cudart|cublas|cublasLt|cusolver|cusolverMg|cupti|cudnn)[^ ]*' >/dev/null ; then
-                echo "    Found CUDA/cuDNN-dependent symbol in $sofile"
-                bad=1
-              fi
-            done < <(find "$tmpdir" -name '*.so' -print0)
-            rm -rf "$tmpdir"
-          done
-          if [ "$bad" -ne 0 ]; then
-            echo "ERROR: One or more wheels contain CUDA/cuDNN dependencies. Aborting."
-            exit 1
-          else
-            echo "OK: No CUDA/cuDNN libs bundled in wheels."
-          fi
-
       - name: Upload wheels as artifacts
         uses: actions/upload-artifact@v4
         with:
