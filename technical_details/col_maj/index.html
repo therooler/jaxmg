@@ -12,13 +12,13 @@
         <meta name="author" content="Roeland Wiersema">
       
       
-        <link rel="canonical" href="https://therooler.github.io/jaxmg/examples/potrs_example/">
+        <link rel="canonical" href="https://therooler.github.io/jaxmg/technical_details/col_maj/">
       
       
-        <link rel="prev" href="../../install/">
+        <link rel="prev" href="../../api/syevd/">
       
       
-        <link rel="next" href="../block_cyclic_data_layout/">
+        <link rel="next" href="../spmd/">
       
       
       <link rel="icon" href="../../_static/square.png">
@@ -26,7 +26,7 @@
     
     
       
-        <title>Cholesky decomposition with jaxmg.potrs - JAXMg</title>
+        <title>Column major layout expectations - JAXMg</title>
       
     
     
@@ -84,7 +84,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#cholesky-decomposition-with-jaxmgpotrs" class="md-skip">
+        <a href="#column-major-layout-expectations" class="md-skip">
           Skip to content
         </a>
       
@@ -117,7 +117,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Cholesky decomposition with jaxmg.potrs
+              Column major layout expectations
             
           </span>
         </div>
@@ -246,13 +246,11 @@
   
   
   
-    
-  
   
     
     
-      <li class="md-tabs__item md-tabs__item--active">
-        <a href="./" class="md-tabs__link">
+      <li class="md-tabs__item">
+        <a href="../../examples/potrs_example/" class="md-tabs__link">
           
   
   
@@ -288,11 +286,13 @@
   
   
   
+    
+  
   
     
     
-      <li class="md-tabs__item">
-        <a href="../../technical_details/col_maj/" class="md-tabs__link">
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="./" class="md-tabs__link">
           
   
   
@@ -448,31 +448,26 @@
       
   
   
-    
   
   
-  
     
     
     
     
-      
-        
-        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
         
           
-          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
             
   
   
@@ -485,7 +480,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_2">
             <span class="md-nav__icon md-icon"></span>
             Examples
@@ -496,19 +491,10 @@
                 
   
   
-    
   
   
-  
-    <li class="md-nav__item md-nav__item--active">
-      
-      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
-      
-      
-        
-      
-      
-      <a href="./" class="md-nav__link md-nav__link--active">
+    <li class="md-nav__item">
+      <a href="../../examples/potrs_example/" class="md-nav__link">
         
   
   
@@ -519,7 +505,6 @@
   
 
       </a>
-      
     </li>
   
 
@@ -532,7 +517,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../block_cyclic_data_layout/" class="md-nav__link">
+      <a href="../../examples/block_cyclic_data_layout/" class="md-nav__link">
         
   
   
@@ -555,7 +540,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../spmd_mpmd/" class="md-nav__link">
+      <a href="../../examples/spmd_mpmd/" class="md-nav__link">
         
   
   
@@ -724,26 +709,31 @@
       
   
   
+    
   
   
+  
     
     
     
     
+      
+        
+        
       
       
         
       
     
     
-    <li class="md-nav__item md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
         
           
-          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
             
   
   
@@ -756,7 +746,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_4">
             <span class="md-nav__icon md-icon"></span>
             Technical Details
@@ -767,10 +757,19 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../technical_details/col_maj/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -781,6 +780,7 @@
   
 
       </a>
+      
     </li>
   
 
@@ -793,7 +793,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../technical_details/spmd/" class="md-nav__link">
+      <a href="../spmd/" class="md-nav__link">
         
   
   
@@ -816,7 +816,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../technical_details/mpmd/" class="md-nav__link">
+      <a href="../mpmd/" class="md-nav__link">
         
   
   
@@ -873,103 +873,77 @@
 
 
 
-<h1 id="cholesky-decomposition-with-jaxmgpotrs">Cholesky decomposition with jaxmg.potrs<a class="headerlink" href="#cholesky-decomposition-with-jaxmgpotrs" title="Permanent link">¤</a></h1>
-<p>Here, we give an example of calling <code>jax.potrs</code>, which solves the linear system of equations <span class="arithmatex">\(Ax=b\)</span> for symmetric, positive-definite <span class="arithmatex">\(A\)</span> via a Cholesky decomposition.</p>
-<p>The interface of <code>jaxmg.potrs</code> is simple to use; one needs to supply to underlying mesh of the sharded data and specify the input shardings:</p>
-<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">jax</span>
-<span class="n">jax</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="s2">&quot;jax_enable_x64&quot;</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
-<span class="kn">import</span><span class="w"> </span><span class="nn">jax.numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">jnp</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">jax.sharding</span><span class="w"> </span><span class="kn">import</span> <span class="n">PartitionSpec</span> <span class="k">as</span> <span class="n">P</span><span class="p">,</span> <span class="n">NamedSharding</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">potrs</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-<span class="c1"># Assumes we have at least one GPU available</span>
-<span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
-<span class="n">N</span> <span class="o">=</span> <span class="mi">12</span>
-<span class="n">T_A</span> <span class="o">=</span> <span class="mi">3</span>
-<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float64</span>
-<span class="c1"># Create diagonal matrix and `b` all equal to one</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">diag</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
-<span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
-<span class="c1"># Make mesh and place data (rows sharded)</span>
-<span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
-<span class="c1"># Call potrs</span>
-<span class="n">out</span> <span class="o">=</span> <span class="n">potrs</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="o">=</span><span class="n">T_A</span><span class="p">,</span> <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span> <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
-<span class="n">expected_out</span> <span class="o">=</span> <span class="mf">1.0</span> <span class="o">/</span> <span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">jnp</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">flatten</span><span class="p">(),</span> <span class="n">expected_out</span><span class="p">))</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code>mkdir -p failed for path /home/rwiersema/.cache/matplotlib: [Errno 13] Permission denied: &#39;/home/rwiersema&#39;
-Matplotlib created a temporary cache directory at /tmp/matplotlib-kkpjcj85 because there was an issue with the default path (/home/rwiersema/.cache/matplotlib); it is highly recommended to set the MPLCONFIGDIR environment variable to a writable directory, in particular to speed up the import of Matplotlib and to better support multiprocessing.
-</code></pre></div>
-<div class="highlight"><pre><span></span><code>Devices: [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2)]
-[[1.        ]
- [0.5       ]
- [0.33333333]
- [0.25      ]
- [0.2       ]
- [0.16666667]
- [0.14285714]
- [0.125     ]
- [0.11111111]
- [0.1       ]
- [0.09090909]
- [0.08333333]]
-True
-</code></pre></div>
-<p>We retrieve the inverse of the diagonal since we set <span class="arithmatex">\(b\)</span> equal to a vector of ones. </p>
-<p>The API <code>jaxmg.potrs</code> is useful if you are not working in a <code>jax.shard_map</code> context, since <code>jaxmg.potrs</code> takes care of the shard map for you. However, in a typical application we may already be working in a sharded context. We therefore provide an
-additional API that can be called from such a context.</p>
-<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">jaxmg</span><span class="w"> </span><span class="kn">import</span> <span class="n">potrs_shardmap_ctx</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">functools</span><span class="w"> </span><span class="kn">import</span> <span class="n">partial</span>
-
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Devices: </span><span class="si">{</span><span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">()</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">shard_mapped_fn</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">):</span>
-    <span class="n">_a</span> <span class="o">=</span> <span class="n">_a</span> <span class="o">*</span> <span class="p">(</span><span class="n">jax</span><span class="o">.</span><span class="n">lax</span><span class="o">.</span><span class="n">axis_index</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">)</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span> <span class="c1"># Multiply each shard with the axis number</span>
-    <span class="k">return</span> <span class="n">potrs_shardmap_ctx</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">)</span>
-
-<span class="k">def</span><span class="w"> </span><span class="nf">my_fn</span><span class="p">(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">,</span> <span class="n">_T_A</span><span class="p">):</span>
-    <span class="n">out</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">shard_map</span><span class="p">(</span>
-        <span class="n">partial</span><span class="p">(</span><span class="n">shard_mapped_fn</span><span class="p">,</span> <span class="n">_T_A</span><span class="o">=</span><span class="n">_T_A</span><span class="p">),</span>
-        <span class="n">mesh</span><span class="o">=</span><span class="n">mesh</span><span class="p">,</span>
-        <span class="n">in_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)),</span>
-        <span class="n">out_specs</span><span class="o">=</span><span class="p">(</span><span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">)),</span> <span class="c1"># we always return a status.</span>
-        <span class="n">check_vma</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
-    <span class="p">)(</span><span class="n">_a</span><span class="p">,</span> <span class="n">_b</span><span class="p">)</span>
-    <span class="k">return</span> <span class="n">out</span>
-
-
-<span class="c1"># Assumes we have at least one GPU available</span>
-<span class="n">devices</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">devices</span><span class="p">(</span><span class="s2">&quot;gpu&quot;</span><span class="p">)</span>
-<span class="n">N</span> <span class="o">=</span> <span class="mi">6</span>
-<span class="n">T_A</span> <span class="o">=</span> <span class="mi">1</span>
-<span class="n">dtype</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">float32</span>
-<span class="c1"># Create diagonal matrix</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">eye</span><span class="p">(</span><span class="n">N</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">jnp</span><span class="o">.</span><span class="n">ones</span><span class="p">((</span><span class="n">N</span><span class="p">,</span> <span class="mi">1</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
-<span class="n">ndev</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">devices</span><span class="p">)</span>
-<span class="c1"># Make mesh and place data (rows sharded)</span>
-<span class="n">mesh</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">make_mesh</span><span class="p">((</span><span class="n">ndev</span><span class="p">,),</span> <span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,))</span>
-<span class="n">A</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="s2">&quot;x&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
-<span class="n">b</span> <span class="o">=</span> <span class="n">jax</span><span class="o">.</span><span class="n">device_put</span><span class="p">(</span><span class="n">b</span><span class="p">,</span> <span class="n">NamedSharding</span><span class="p">(</span><span class="n">mesh</span><span class="p">,</span> <span class="n">P</span><span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">)))</span>
-<span class="c1"># Call potrs</span>
-<span class="n">out</span><span class="p">,</span> <span class="n">status</span> <span class="o">=</span> <span class="n">my_fn</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">b</span><span class="p">,</span> <span class="n">T_A</span><span class="p">)</span>
-<span class="nb">print</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">block_until_ready</span><span class="p">())</span>
-<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Solver status: </span><span class="si">{</span><span class="n">status</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
-</code></pre></div>
-<div class="highlight"><pre><span></span><code>Devices: [CudaDevice(id=0), CudaDevice(id=1), CudaDevice(id=2)]
-[[1.        ]
- [1.        ]
- [0.49999997]
- [0.49999997]
- [0.3333333 ]
- [0.3333333 ]]
-Solver status: [0]
-</code></pre></div>
-<p>After multiplying the diagonal with the axis number <code>"x"</code> we get the the expected solution <span class="arithmatex">\((1,1,\frac{1}{2},\frac{1}{2},\frac{1}{3},\frac{1}{3})\)</span></p>
+<h1 id="column-major-layout-expectations">Column major layout expectations<a class="headerlink" href="#column-major-layout-expectations" title="Permanent link">¤</a></h1>
+<p>This note explains the difference between row-major and column-major memory
+layouts, why cuSolverMg requires column-major data, how asking JAX to present
+column-major memory via <code>input_layouts=(1,0)</code> forces a copy (and therefore
+temporarily doubles memory), and how we can instead choose a sharding that
+avoids the extra copy by presenting per-device buffers already in the solver's
+expected column-major order.</p>
+<p>Row-major vs column-major
+- Row-major (C order): rows are laid out contiguously. For an <span class="arithmatex">\(m\\times n\)</span>
+    matrix <span class="arithmatex">\(A\)</span> the memory is the concatenation of rows <span class="arithmatex">\(1,2,\\dots,m\)</span>.
+- Column-major (Fortran order): columns are laid out contiguously. The
+    memory is the concatenation of columns <span class="arithmatex">\(1,2,\\dots,n\)</span>.</p>
+<p>Concretely, for a small <span class="arithmatex">\(4\\times 4\)</span> matrix</p>
+<div class="arithmatex">\[
+A = \\begin{bmatrix}
+a_{11} &amp; a_{12} &amp; a_{13} &amp; a_{14} \\\\
+a_{21} &amp; a_{22} &amp; a_{23} &amp; a_{24} \\\\
+a_{31} &amp; a_{32} &amp; a_{33} &amp; a_{34} \\\\
+a_{41} &amp; a_{42} &amp; a_{43} &amp; a_{44}
+\\end{bmatrix}
+\]</div>
+<ul>
+<li>Row-major flattening (C order) produces</li>
+</ul>
+<div class="arithmatex">\[
+\\operatorname{row\\_major}(A) = [a_{11}, a_{12}, a_{13}, a_{14},\\; a_{21}, a_{22},\\dots,a_{44}]
+\]</div>
+<ul>
+<li>Column-major flattening (Fortran order) produces</li>
+</ul>
+<div class="arithmatex">\[
+\\operatorname{col\\_major}(A) = [a_{11}, a_{21}, a_{31}, a_{41},\\; a_{12}, a_{22},\\dots,a_{44}]
+\]</div>
+<p>Why this matters for cuSolverMg
+- cuSolverMg (like many Fortran-style numerical libraries) expects matrix
+    buffers in column-major order. If the Python/JAX side stores matrices in
+    row-major order, the native call must be given a column-major view.</p>
+<p>Using <code>input_layouts=(1,0)</code>
+- When you construct an FFI call with <code>input_layouts=(1,0)</code> you are telling
+    JAX to present the native function with the axes swapped (i.e. the memory
+    should look column-major to the native code). JAX will therefore allocate a
+    new buffer and copy/reorder the data into the requested layout before the
+    call.
+- Practically this means: original buffer (size <span class="arithmatex">\(N\)</span>) + reordered buffer
+    (size <span class="arithmatex">\(N\)</span>) exist at peak, so the memory used for this array is roughly
+    doubled during the call. For large matrices this spike can be prohibitive.</p>
+<p>Avoiding the copy by matching sharding to column-major
+- Instead of asking JAX to transpose the whole matrix, we can arrange the
+    per-device sharding so that the collection of device-local buffers already
+    matches the solver's expected column-major ordering. The key idea is to map
+    global columns (or column tiles) to contiguous device-local memory.</p>
+<p>Example: split into two column-blocks</p>
+<p>Split <span class="arithmatex">\(A\)</span> into two column-blocks <span class="arithmatex">\(B\)</span> and <span class="arithmatex">\(C\)</span> (each <span class="arithmatex">\(4\\times 2\)</span>):</p>
+<div class="arithmatex">\[
+A = [\\; B \\;|\\; C \\;],\\quad
+B=\\begin{bmatrix} a_{11} &amp; a_{12} \\\\
+a_{21} &amp; a_{22} \\\\
+a_{31} &amp; a_{32} \\\\
+a_{41} &amp; a_{42}\\end{bmatrix},\\quad
+C=\\begin{bmatrix} a_{13} &amp; a_{14} \\\\
+a_{23} &amp; a_{24} \\\\
+a_{33} &amp; a_{34} \\\\
+a_{43} &amp; a_{44}\\end{bmatrix}
+\]</div>
+<p>In column-major flattening, <span class="arithmatex">\(B\)</span> appears as a contiguous chunk followed by <span class="arithmatex">\(C\)</span>:</p>
+<div class="arithmatex">\[
+\\operatorname{col\\_major}(A) = [\\operatorname{col\\_major}(B),\\; \\operatorname{col\\_major}(C)].
+\]</div>
+<p>If device 0 stores <span class="arithmatex">\(B\)</span> and device 1 stores <span class="arithmatex">\(C\)</span> in their native local buffers
+then the solver can consume device-local memory directly in the expected
+column-major order without a global transpose or full-array copy.</p>
 
 
 
