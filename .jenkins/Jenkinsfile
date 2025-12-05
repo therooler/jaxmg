@@ -1,0 +1,40 @@
+pipeline {
+    agent {
+        dockerfile {
+            filename '.jenkins/Dockerfile'
+            args '--gpus 1'
+            label 'docker && v100'
+        }
+    }
+    options {
+        timeout(time: 1, unit: 'HOURS')
+    }
+    environment {
+        HOME = "$WORKSPACE"
+    }
+    stages {
+        stage('Build') {
+            steps {
+                sh '''
+                    mkdir build # TODO cmake, test jenkins with precompiled artifacts to start
+                '''
+                sh '''
+                    python3 -m venv $HOME/.venv
+                    source $HOME/.venv/bin/activate
+                    python3 -m build --wheel
+                    python3 -m pip install dist/jaxmg-0.0.2-cp311-cp311-linux_x86_64.whl
+                    # TODO python versions
+                '''
+            }
+        }
+        stage('Test') {
+            steps {
+                sh '''
+                    source $HOME/.venv/bin/activate
+                    python3 -m pip install 'pytest==8.2.1'
+                    python3 -m pytest
+                '''
+            }
+        }
+    }
+}
