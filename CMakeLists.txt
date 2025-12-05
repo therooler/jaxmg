@@ -39,9 +39,9 @@ find_library(CUSOLVERMG_LIB cusolverMg
     REQUIRED)
 # Import CUDAToolkit (Requires CUDA_HOME to be set)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}" ${CMAKE_MODULE_PATH})
-find_package(CUDNN REQUIRED)
+# find_package(CUDNN REQUIRED)
 message(STATUS "CUDA include directory: $ENV{CUDA_ROOT}")
-message(STATUS "CUDNN include directory: $ENV{CUDNN_ROOT}")
+# message(STATUS "CUDNN include directory: $ENV{CUDNN_ROOT}")
 # Enable CUDA 
 enable_language(CUDA)
 
@@ -73,13 +73,13 @@ execute_process(
 if(NOT ln_result EQUAL 0)
     message(FATAL_ERROR "Failed to create symlink for CUDA: $ENV{CUDA_ROOT}")
 endif()
-execute_process(
-    COMMAND ln -sfn $ENV{CUDNN_ROOT}/include ${CMAKE_SOURCE_DIR}/third_party/gpus/cudnn
-    RESULT_VARIABLE ln_result
-)
-if(NOT ln_result EQUAL 0)
-    message(FATAL_ERROR "Failed to create symlink for CUDNN: $ENV{CUDNN_ROOT}/include")
-endif()
+# execute_process(
+#     COMMAND ln -sfn $ENV{CUDNN_ROOT}/include ${CMAKE_SOURCE_DIR}/third_party/gpus/cudnn
+#     RESULT_VARIABLE ln_result
+# )
+# if(NOT ln_result EQUAL 0)
+#     message(FATAL_ERROR "Failed to create symlink for CUDNN: $ENV{CUDNN_ROOT}/include")
+# endif()
 file(MAKE_DIRECTORY ${CMAKE_SOURCE_DIR}/xla/ffi)
 execute_process(
     COMMAND ln -sfn ${XLA_SOURCE_DIR}/xla/ffi/api ${CMAKE_SOURCE_DIR}/xla/ffi
