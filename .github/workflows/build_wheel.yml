@@ -27,7 +27,7 @@ jobs:
 
       # 1) Build the CUDA libs using your composite action
       - name: Build CUDA libs
-        uses: ./.github/actions/build-cuda-libs
+        uses: ./.github/workflows/actions/compile_cuda.yml
 
       # 2) Set up Python
       - name: Set up Python
