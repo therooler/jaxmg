@@ -16,6 +16,9 @@ from jaxmg import cyclic_1d, verify_cyclic
 from jaxmg.utils import random_psd
 from functools import partial
 
+if len(jax.devices("gpu"))==0:
+    pytest.skip("No GPUs found. Skipping test...")
+    
 devices = [d for d in jax.devices() if d.platform == "gpu"]
 ndev = len(devices)
 mesh = jax.make_mesh((ndev,), ("x",))
