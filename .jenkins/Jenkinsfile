@@ -41,12 +41,11 @@ pipeline {
         }
         stage('Test') {
             environment {
-                CUDA_VISIBLE_DEVICES = '0,1'
+                CUDA_VISIBLE_DEVICES = "0,1"
             }
             steps {
                 sh '''#!/bin/bash -ex
                     source $HOME/.venv/bin/activate
-                    python3 -c 'import jax; print(jax.devices())'
                     python3 -m pip install 'pytest==8.2.1'
                     python3 -m pytest
                 '''
