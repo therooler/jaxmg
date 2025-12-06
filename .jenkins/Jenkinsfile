@@ -2,7 +2,7 @@ pipeline {
     agent {
         dockerfile {
             filename '.jenkins/Dockerfile'
-            args '--gpus 2'
+            args '--gpus 1'
             label 'docker && v100'
         }
     }
@@ -40,9 +40,6 @@ pipeline {
             }
         }
         stage('Test') {
-            environment {
-                CUDA_VISIBLE_DEVICES = "0,1"
-            }
             steps {
                 sh '''#!/bin/bash -ex
                     source $HOME/.venv/bin/activate
