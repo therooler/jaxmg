@@ -15,10 +15,6 @@ def _println(prefix: str, payload: dict):
 
 def main(argv: List[str]):
     # Usage:
-    # discovery/grid mode:
-    #   run_test_potrs.py <coord> <proc_id> <num_procs> [selected_csv]
-    # single-task mode:
-    #   run_test_potrs.py <coord> <proc_id> <num_procs> <test_name> <N> <T_A> <dtype_name>
     if len(argv) < 4:
         print(
             "Usage: run_test_potrs.py <coord_addr> <proc_id> <num_procs> [selected_csv]"
@@ -61,25 +57,27 @@ def main(argv: List[str]):
     from jaxmg.utils import random_psd
     from itertools import product
 
-
     # These will be initialized after jax.distributed.initialize()
     devices = [d for d in jax.devices() if d.platform == "gpu"]
     mesh = jax.make_mesh((jax.device_count(),), ("x",))
 
-
     @partial(jax.jit, static_argnames=("_T_A",))
     def jitted_potrs(_a, _b, _T_A):
-        out = partial(potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True)(_a, _b, _T_A)
+        out = partial(
+            potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True
+        )(_a, _b, _T_A)
         return out
-
 
     @partial(jax.jit, static_argnames=("_T_A",))
     def jitted_potrs_status(_a, _b, _T_A):
         out = partial(
-            potrs, mesh=mesh, in_specs=(P("x", None), P(None, None)), pad=True, return_status=True
+            potrs,
+            mesh=mesh,
+            in_specs=(P("x", None), P(None, None)),
+            pad=True,
+            return_status=True,
         )(_a, _b, _T_A)
         return out
-
 
     @partial(jax.jit, static_argnames=("_T_A",))
     def jitted_potrs_no_shardmap(_a, _b, _T_A):
@@ -92,7 +90,6 @@ def main(argv: List[str]):
         )(_a, _b)
         return out
 
-
     def cusolver_solve_arange(N, T_A, dtype):
         A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
         b = jnp.ones((N, 1), dtype=dtype)
@@ -103,7 +100,6 @@ def main(argv: List[str]):
         assert jnp.allclose(out.flatten(), expected_out)
         out_no_shm, _ = jitted_potrs_no_shardmap(_A.copy(), _b.copy(), T_A)
         assert jnp.allclose(out_no_shm.flatten(), expected_out)
-
 
     def cusolver_solve_psd(N, T_A, dtype):
         A = random_psd(N, dtype=dtype, seed=1234)
@@ -123,7 +119,6 @@ def main(argv: List[str]):
         norm_potrf = jnp.linalg.norm(b - A @ out_no_shm)
         assert jnp.allclose(out_no_shm.flatten(), out.flatten())
 
-
     def cusolver_solve_non_psd(N, T_A, dtype):
         A = jnp.diag(jnp.arange(N, dtype=dtype) - 1)
         b = jnp.ones((N, 1), dtype=dtype)
@@ -135,7 +130,6 @@ def main(argv: List[str]):
         out.block_until_ready()
         assert status == 7
         assert jnp.all(jnp.isnan(out))
-
 
     def cusolver_solve_non_symm(N, T_A, dtype):
         A = jnp.diag(jnp.arange(N, dtype=dtype) + 1)
@@ -150,7 +144,6 @@ def main(argv: List[str]):
         assert status == 7
         assert jnp.all(jnp.isnan(out))
 
-
     def _build_registry() -> Dict[str, Callable[[int, int, jnp.dtype], None]]:
         return {
             "arange": cusolver_solve_arange,
@@ -158,7 +151,6 @@ def main(argv: List[str]):
             "non_symm": cusolver_solve_non_symm,
             "psd": cusolver_solve_psd,
         }
-
 
     registry = _build_registry()
 
@@ -194,7 +186,9 @@ def main(argv: List[str]):
                     "message": f"unknown test '{task_name}'",
                 },
             )
-            _println("MPTEST_SUMMARY", {"proc": proc_id, "ok": 0, "fail": 0, "total": 0})
+            _println(
+                "MPTEST_SUMMARY", {"proc": proc_id, "ok": 0, "fail": 0, "total": 0}
+            )
             return 0
 
         # map dtype name to jnp dtype
@@ -210,7 +204,9 @@ def main(argv: List[str]):
                     "message": f"unknown dtype '{task_dtype_name}'",
                 },
             )
-            _println("MPTEST_SUMMARY", {"proc": proc_id, "ok": 0, "fail": 0, "total": 0})
+            _println(
+                "MPTEST_SUMMARY", {"proc": proc_id, "ok": 0, "fail": 0, "total": 0}
+            )
             return 0
 
         n_ok = 0
@@ -241,7 +237,10 @@ def main(argv: List[str]):
             )
             n_fail += 1
 
-        _println("MPTEST_SUMMARY", {"proc": proc_id, "ok": n_ok, "fail": n_fail, "total": n_ok + n_fail})
+        _println(
+            "MPTEST_SUMMARY",
+            {"proc": proc_id, "ok": n_ok, "fail": n_fail, "total": n_ok + n_fail},
+        )
         return 0
 
     # Legacy/grid mode: selected_csv may limit which tests to run

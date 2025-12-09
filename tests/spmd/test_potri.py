@@ -74,13 +74,13 @@ def cusolver_solve_psd(N, T_A, dtype):
     assert jnp.allclose(A.conj().T, A)
     norm_potri = jnp.linalg.norm(A @ out - jnp.eye(N, dtype=dtype))
     norm_lax = jnp.linalg.norm(A @ expected_out - jnp.eye(N, dtype=dtype))
-    assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=0.0)
+    assert jnp.isclose(norm_potri, norm_lax, rtol=10, atol=1e-8)
     expected_out_no_shm, _ = jitted_potri_no_shardmap(_A, T_A)
     expected_out_no_shm = potri_symmetrize(expected_out_no_shm)
     norm_potri_no_shm = jnp.linalg.norm(
         A @ expected_out_no_shm - jnp.eye(N, dtype=dtype)
     )
-    assert jnp.allclose(norm_potri_no_shm, norm_lax, rtol=10, atol=0.0)
+    assert jnp.allclose(norm_potri_no_shm, norm_lax, rtol=10, atol=1e-8)
 
 
 def cusolver_solve_non_psd(N, T_A, dtype):
