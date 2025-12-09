@@ -42,25 +42,30 @@ def main():
     print(f"Device grid{get_device_grid()}")
 
     mesh2d = create_2d_mesh()
-    dtype= jnp.float32
+    dtype = jnp.float32
     A = jax.device_put(
         jnp.diag(jnp.arange(1, jax.device_count() + 1, dtype=dtype)),
         NamedSharding(mesh2d, P(None, ("x", "y"))),
     )
 
-    shard_size = jax.device_count()//jax.local_device_count()
+    shard_size = jax.device_count() // jax.local_device_count()
 
     for i, shard in enumerate(A.addressable_shards):
         print(f"shard\n {shard.data}")
-        assert jnp.isclose(jnp.sum(shard.data), i+1+jax.process_index()*shard_size)
+        assert jnp.isclose(
+            jnp.sum(shard.data), i + 1 + jax.process_index() * shard_size
+        )
 
     # Gather over the number of hosts
     A = jax.lax.with_sharding_constraint(A, NamedSharding(mesh2d, P(None, "y")))
     print(f"Device: {jax.process_index()}")
     for i, shard in enumerate(A.addressable_shards):
         start = i * shard_size
-        end = (i+1) * shard_size
-        assert jnp.allclose(shard.data[start:end,:], jnp.diag(jnp.arange(1, shard_size+1, dtype=dtype)+i*shard_size))
+        end = (i + 1) * shard_size
+        assert jnp.allclose(
+            shard.data[start:end, :],
+            jnp.diag(jnp.arange(1, shard_size + 1, dtype=dtype) + i * shard_size),
+        )
 
 
 if __name__ == "__main__":
