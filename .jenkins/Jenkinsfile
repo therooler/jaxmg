@@ -39,10 +39,10 @@ pipeline {
                 '''
             }
         }
-        environment {
-            CUDA_VISIBLE_DEVICES = "0,1"
-        }
         stage('Test') {
+            environment {
+                CUDA_VISIBLE_DEVICES = "0,1"
+            }
             steps {
                 sh '''#!/bin/bash -ex
                     source $HOME/.venv/bin/activate
