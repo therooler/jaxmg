@@ -34,7 +34,7 @@ pipeline {
                     source $HOME/.venv/bin/activate
                     python3 -m pip install --upgrade pip build
                     python3 -m build --wheel
-                    python3 -m pip install dist/jaxmg-*.whl
+                    python3 -m pip install dist/jaxmg-*.whl\[cuda12-local\]
                     # TODO python versions
                 '''
             }
