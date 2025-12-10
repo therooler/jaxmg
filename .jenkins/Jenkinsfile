@@ -2,7 +2,7 @@ pipeline {
     agent {
         dockerfile {
             filename '.jenkins/Dockerfile'
-            args '--gpus 2'
+            args '--gpus=2 --shm-size=32gb'
             label 'docker && v100'
         }
     }
